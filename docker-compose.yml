@@ -1,0 +1,81 @@
+# TestMind AI - Docker Compose配置
+version: '3.8'
+
+services:
+  # 主应用服务
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://testmind:testmind@db:5432/testmind
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=false
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL数据库
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=testmind
+      - POSTGRES_USER=testmind
+      - POSTGRES_PASSWORD=testmind
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testmind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 开发环境服务（可选）
+  dev:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql://testmind:testmind@db:5432/testmind_dev
+      - REDIS_URL=redis://redis:6379/1
+      - DEBUG=true
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./requirements:/app/requirements
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    profiles:
+      - dev
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,150 @@
+{
+  "currentState": "memory_saved",
+  "stateHistory": [
+    {
+      "from": "initial",
+      "command": "init",
+      "timestamp": "2025-07-14T08:20:39.128Z",
+      "args": [
+        {
+          "workingDirectory": "e:\\DevRep\\TestMind-AI\\TestMind-AI",
+          "ideType": "cursor"
+        }
+      ]
+    },
+    {
+      "from": "initialized",
+      "command": "welcome",
+      "timestamp": "2025-07-14T08:20:44.351Z",
+      "args": []
+    },
+    {
+      "from": "service_discovery",
+      "command": "action",
+      "timestamp": "2025-07-14T08:21:43.489Z",
+      "args": [
+        "nuwa"
+      ]
+    },
+    {
+      "from": "role_activated",
+      "command": "init",
+      "timestamp": "2025-07-14T08:24:02.002Z",
+      "args": [
+        {
+          "workingDirectory": "e:\\DevRep\\TestMind-AI\\TestMind-AI",
+          "ideType": "cursor"
+        }
+      ]
+    },
+    {
+      "from": "initialized",
+      "command": "action",
+      "timestamp": "2025-07-14T08:27:00.329Z",
+      "args": [
+        "project-manager"
+      ]
+    },
+    {
+      "from": "role_activated",
+      "command": "remember",
+      "timestamp": "2025-07-14T08:27:30.026Z",
+      "args": [
+        "project-manager",
+        "[{\"content\":\"TestMind AI是AI驱动的自动化测试平台，专注传统软件测试与AI应用测试统一解决方案\",\"schema\":\"TestMind AI\\n  产品定位\\n  AI测试平台\",\"strength\":0.9,\"type\":\"ATOMIC\"},{\"content\":\"核心技术栈：FastAPI + LangChain + OpenAI/Claude API + PostgreSQL + Redis + Celery\",\"schema\":\"技术栈\\n  后端框架\\n  Python生态\",\"strength\":0.9,\"type\":\"PATTERN\"},{\"content\":\"六大核心模块：智能需求解析、测试策略规划、测试用例生成、AI质量审查、测试执行引擎、智能结果分析\",\"schema\":\"功能模块\\n  系统架构\\n  核心能力\",\"strength\":0.95,\"type\":\"PATTERN\"},{\"content\":\"支持三种测试类型：接口测试、功能测试、Prompt测试（AI应用专业测试）\",\"schema\":\"测试类型\\n  产品功能\\n  差异化优势\",\"strength\":0.9,\"type\":\"PATTERN\"},{\"content\":\"MVP阶段团队配置：11人团队，包含产品、技术、AI、前后端、测试、设计各角色\",\"schema\":\"团队配置\\n  资源规划\\n  MVP阶段\",\"strength\":0.8,\"type\":\"PATTERN\"}]"
+      ]
+    },
+    {
+      "from": "memory_saved",
+      "command": "init",
+      "timestamp": "2025-07-14T09:15:33.811Z",
+      "args": [
+        {
+          "workingDirectory": "e:\\DevRep\\TestMind-AI\\TestMind-AI",
+          "ideType": "cursor"
+        }
+      ]
+    },
+    {
+      "from": "initialized",
+      "command": "action",
+      "timestamp": "2025-07-14T09:15:40.703Z",
+      "args": [
+        "nuwa"
+      ]
+    },
+    {
+      "from": "role_activated",
+      "command": "action",
+      "timestamp": "2025-07-14T09:20:52.788Z",
+      "args": [
+        "senior-python-expert"
+      ]
+    },
+    {
+      "from": "role_activated",
+      "command": "init",
+      "timestamp": "2025-07-14T09:21:05.777Z",
+      "args": [
+        {
+          "workingDirectory": "e:\\DevRep\\TestMind-AI\\TestMind-AI",
+          "ideType": "cursor"
+        }
+      ]
+    },
+    {
+      "from": "initialized",
+      "command": "action",
+      "timestamp": "2025-07-14T09:21:17.488Z",
+      "args": [
+        "senior-python-expert"
+      ]
+    },
+    {
+      "from": "role_activated",
+      "command": "remember",
+      "timestamp": "2025-07-14T09:37:58.639Z",
+      "args": [
+        "senior-python-expert",
+        "[{\"content\":\"用户采用严格的Sprint门控策略：每个Sprint完成后必须通过测试才能进入下一个Sprint\",\"schema\":\"Sprint门控策略\\n  质量控制\\n  风险管理\",\"strength\":0.9,\"type\":\"PATTERN\"},{\"content\":\"用户关心所有Sprint的技术实现细节，需要全面的TDD指导\",\"schema\":\"用户需求\\n  技术指导\\n  TDD实践\",\"strength\":0.85,\"type\":\"ATOMIC\"},{\"content\":\"TestMind AI项目采用6个Sprint的瀑布式开发模式，每Sprint 2周\",\"schema\":\"项目管理\\n  开发模式\\n  时间规划\",\"strength\":0.8,\"type\":\"PATTERN\"}]"
+      ]
+    },
+    {
+      "from": "memory_saved",
+      "command": "recall",
+      "timestamp": "2025-07-14T10:21:20.043Z",
+      "args": [
+        "senior-python-expert",
+        "Sprint 1进度"
+      ]
+    },
+    {
+      "from": "recalled-senior-python-expert",
+      "command": "remember",
+      "timestamp": "2025-07-14T10:29:20.320Z",
+      "args": [
+        "senior-python-expert",
+        "[{\"content\":\"Sprint 1完全完成，所有验收标准通过：开发环境、数据库连接、测试覆盖率85%\",\"schema\":\"Sprint 1\\n  项目里程碑\\n  质量门控通过\",\"strength\":0.95,\"type\":\"PATTERN\"},{\"content\":\"PostgreSQL和Redis数据库连接测试全部通过，应用集成正常\",\"schema\":\"数据库测试\\n  连接验证\\n  集成测试\",\"strength\":0.9,\"type\":\"ATOMIC\"},{\"content\":\"TDD驱动开发成功实施，21个测试用例全部通过，代码质量高\",\"schema\":\"TDD实践\\n  测试驱动开发\\n  代码质量\",\"strength\":0.9,\"type\":\"PATTERN\"},{\"content\":\"用户采用严格的Sprint门控策略，每个Sprint完成后必须通过测试才能进入下一个Sprint\",\"schema\":\"质量管理\\n  Sprint门控\\n  测试验收\",\"strength\":0.85,\"type\":\"PATTERN\"}]"
+      ]
+    },
+    {
+      "from": "memory_saved",
+      "command": "remember",
+      "timestamp": "2025-07-14T10:48:21.885Z",
+      "args": [
+        "senior-python-expert",
+        "[{\"content\":\"配置管理重构完成，实现环境变量驱动配置，移除硬编码，增加安全验证\",\"schema\":\"配置管理\\n  环境变量\\n  安全验证\",\"strength\":0.9,\"type\":\"PATTERN\"},{\"content\":\"生产环境强制安全密钥验证，API密钥格式验证，URL格式验证\",\"schema\":\"安全配置\\n  生产环境\\n  格式验证\",\"strength\":0.85,\"type\":\"ATOMIC\"},{\"content\":\"TDD重构成功，46个测试全部通过，代码覆盖率87%，向后兼容性保持\",\"schema\":\"TDD重构\\n  测试通过\\n  代码质量\",\"strength\":0.9,\"type\":\"PATTERN\"}]"
+      ]
+    },
+    {
+      "from": "memory_saved",
+      "command": "remember",
+      "timestamp": "2025-07-14T10:54:31.920Z",
+      "args": [
+        "senior-python-expert",
+        "[{\"content\":\"Markdown解析器TDD开发完成，支持frontmatter、代码块、表格、链接、用户故事提取\",\"schema\":\"Markdown解析器\\n  文档解析\\n  结构化提取\",\"strength\":0.95,\"type\":\"PATTERN\"},{\"content\":\"57个测试全部通过，代码覆盖率83%，性能测试<1秒，解析器覆盖率90%\",\"schema\":\"测试质量\\n  TDD开发\\n  性能优化\",\"strength\":0.9,\"type\":\"ATOMIC\"},{\"content\":\"Sprint 2 Phase 2完成，已完成数据模型和Markdown解析器，下一步LangChain集成\",\"schema\":\"Sprint 2进度\\n  Phase 2完成\\n  LangChain集成\",\"strength\":0.9,\"type\":\"PATTERN\"}]"
+      ]
+    }
+  ],
+  "lastUpdated": "2025-07-14T10:54:31.966Z"
+}
