@@ -1,5 +1,4 @@
 # TestMind AI - Docker Compose配置
-version: '3.8'
 
 services:
   # 主应用服务

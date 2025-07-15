@@ -5,7 +5,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, field_serializer
 
 class RequirementType(str, Enum):
     """需求类型枚举"""
@@ -84,11 +84,13 @@ class Requirement(BaseModel):
     
     model_config = ConfigDict(
         use_enum_values=True,
-        extra="allow",
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        }
+        extra="allow"
     )
+
+    @field_serializer('created_at', 'updated_at', when_used='json')
+    def serialize_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        """序列化datetime字段为ISO格式字符串"""
+        return value.isoformat() if value else None
     
     @field_validator('id')
     @classmethod

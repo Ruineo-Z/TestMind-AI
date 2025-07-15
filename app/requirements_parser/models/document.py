@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional, ClassVar
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, field_serializer
 
 class DocumentType(str, Enum):
     """文档类型枚举"""
@@ -22,7 +22,12 @@ class DocumentMetadata(BaseModel):
     modified_at: Optional[datetime] = Field(None, description="修改时间")
     encoding: Optional[str] = Field(None, description="文件编码")
     language: Optional[str] = Field(None, description="文档语言")
-    
+
+    @field_serializer('created_at', 'modified_at', when_used='json')
+    def serialize_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        """序列化datetime字段为ISO格式字符串"""
+        return value.isoformat() if value else None
+
     @field_validator('file_size')
     @classmethod
     def validate_file_size(cls, v):
@@ -99,8 +104,5 @@ class Document(BaseModel):
     
     model_config = ConfigDict(
         use_enum_values=True,
-        extra="allow",  # 允许额外字段
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        }
+        extra="allow"  # 允许额外字段
     )

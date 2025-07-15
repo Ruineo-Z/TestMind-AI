@@ -1,9 +1,20 @@
 """
 TestMind AI - 主应用入口
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from app.core.config import get_settings
 from app.core.database import get_database_manager, close_database_connections
+from app.api.v1 import api_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时的初始化
+    yield
+    # 关闭时的清理
+    await close_database_connections()
 
 def create_app() -> FastAPI:
     """创建FastAPI应用实例"""
@@ -13,8 +24,12 @@ def create_app() -> FastAPI:
         title=app_settings.app_name,
         version=app_settings.version,
         debug=app_settings.debug,
-        description="AI-powered automated testing platform"
+        description="AI-powered automated testing platform",
+        lifespan=lifespan
     )
+
+    # 注册API路由
+    app.include_router(api_router)
 
     @app.get("/health")
     async def health_check():
@@ -44,10 +59,7 @@ def create_app() -> FastAPI:
                 detail=f"Database health check failed: {str(e)}"
             )
 
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        """应用关闭时清理资源"""
-        await close_database_connections()
+
 
     return app
 
