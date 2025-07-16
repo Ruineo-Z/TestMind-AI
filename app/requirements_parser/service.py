@@ -1,144 +1,187 @@
 """
-需求解析服务
-整合文档解析器和需求提取器，提供统一的解析服务
+文档解析服务
+整合多种文档解析器，提供统一的解析服务，支持需求文档、API文档、Prompt文档等
 """
 import time
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Union
 
 from app.requirements_parser.models.document import Document, DocumentType
 from app.requirements_parser.models.requirement import Requirement, RequirementType, Priority
+from app.requirements_parser.models.api_document import APIDocument
+from app.requirements_parser.models.prompt_document import PromptDocument
 from app.requirements_parser.parsers.markdown_parser import MarkdownParser
 from app.requirements_parser.parsers.pdf_parser import PDFParser
 from app.requirements_parser.parsers.word_parser import WordParser
+from app.requirements_parser.parsers.openapi_parser import OpenAPIParser
+from app.requirements_parser.parsers.prompt_parser import PromptParser
 from app.requirements_parser.extractors.langchain_extractor import LangChainExtractor, AIProvider
+from app.requirements_parser.utils.format_detector import DocumentFormatDetector
 
 
-class RequirementsParsingService:
-    """需求解析服务"""
-    
-    def __init__(self, ai_provider: str = "mock"):
+class DocumentParsingService:
+    """文档解析服务 - 支持多种文档类型的统一解析"""
+
+    def __init__(self, ai_provider: str = "gemini"):
         """
         初始化解析服务
-        
+
         Args:
-            ai_provider: AI提供商 (openai, ollama, gemini, mock)
+            ai_provider: AI提供商 (openai, gemini, ollama, mock)
         """
         self.ai_provider = ai_provider
-        
-        # 初始化解析器
+
+        # 初始化格式检测器
+        self.format_detector = DocumentFormatDetector()
+
+        # 初始化所有解析器
         self.parsers = {
             DocumentType.MARKDOWN: MarkdownParser(),
             DocumentType.PDF: PDFParser(),
-            DocumentType.WORD: WordParser()
+            DocumentType.WORD: WordParser(),
+            DocumentType.OPENAPI: OpenAPIParser(),
+            DocumentType.SWAGGER: OpenAPIParser(),
+            DocumentType.API_MARKDOWN: MarkdownParser(),
+            DocumentType.PROMPT: PromptParser()
         }
-        
-        # 初始化需求提取器
-        self.extractor = LangChainExtractor(
+
+        # 初始化AI提取器（仅用于需求文档）
+        self.requirements_extractor = LangChainExtractor(
             provider=AIProvider(ai_provider),
-            model="gpt-3.5-turbo" if ai_provider == "openai" else "llama2"
+            model="gemini-1.5-pro" if ai_provider == "gemini" else "gpt-3.5-turbo"
         )
     
     async def parse_document(
         self,
         file_path: str,
-        extract_user_stories: bool = True
+        document_type: DocumentType = None,
+        extract_requirements: bool = True
     ) -> Dict[str, Any]:
         """
-        解析文档并提取需求
-        
+        解析文档（支持多种文档类型）
+
         Args:
             file_path: 文档文件路径
-            extract_user_stories: 是否提取用户故事
-            
+            document_type: 指定文档类型（可选，不指定则自动检测）
+            extract_requirements: 是否提取需求（仅对需求文档有效）
+
         Returns:
-            Dict: 解析结果，包含文档和需求信息
-            
+            Dict: 解析结果，包含文档信息和解析内容
+
         Raises:
             ValueError: 文件类型不支持或解析失败时抛出
         """
         start_time = time.time()
-        
+
         try:
-            # 确定文档类型
-            document_type = self._detect_document_type(file_path)
-            
+            # 读取文件内容
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # 自动检测文档类型（如果未指定）
+            if document_type is None:
+                document_type = self.format_detector.detect_format(content, file_path)
+
             # 解析文档
-            document = await self._parse_document(file_path, document_type)
-            
-            # 提取需求
-            requirements = await self._extract_requirements(
-                document, 
-                extract_user_stories
-            )
-            
+            document = await self._parse_document_by_type(file_path, content, document_type)
+
+            # 根据文档类型进行不同的处理
+            result = await self._process_document_by_type(document, extract_requirements)
+
             # 计算处理时间
             processing_time = time.time() - start_time
-            
-            # 计算准确率（简单估算）
-            accuracy = self._estimate_accuracy(document, requirements)
-            
-            return {
-                "document": document,
-                "requirements": requirements,
-                "accuracy": accuracy,
-                "processing_time": processing_time
-            }
+            result["processing_time"] = processing_time
+
+            return result
             
         except Exception as e:
             raise ValueError(f"解析文档失败: {str(e)}")
     
-    def _detect_document_type(self, file_path: str) -> DocumentType:
+    async def _parse_document_by_type(
+        self,
+        file_path: str,
+        content: str,
+        document_type: DocumentType
+    ) -> Document:
         """
-        检测文档类型
-        
+        根据文档类型解析文档
+
         Args:
             file_path: 文件路径
-            
-        Returns:
-            DocumentType: 文档类型
-            
-        Raises:
-            ValueError: 不支持的文件类型时抛出
-        """
-        path = Path(file_path)
-        extension = path.suffix.lower()
-        
-        if extension in {'.md', '.markdown', '.mdown', '.mkd'}:
-            return DocumentType.MARKDOWN
-        elif extension == '.pdf':
-            return DocumentType.PDF
-        elif extension in {'.docx', '.doc'}:
-            return DocumentType.WORD
-        else:
-            raise ValueError(f"不支持的文件类型: {extension}")
-    
-    async def _parse_document(self, file_path: str, document_type: DocumentType) -> Document:
-        """
-        解析文档
-        
-        Args:
-            file_path: 文件路径
+            content: 文件内容
             document_type: 文档类型
-            
+
         Returns:
             Document: 解析后的文档对象
         """
         parser = self.parsers.get(document_type)
         if not parser:
-            raise ValueError(f"没有找到适合的解析器: {document_type}")
-        
-        # 对于Markdown，直接从文件解析
-        if document_type == DocumentType.MARKDOWN:
+            raise ValueError(f"不支持的文档类型: {document_type}")
+
+        # 根据不同类型使用不同的解析方式
+        if document_type in [DocumentType.OPENAPI, DocumentType.SWAGGER]:
+            # API文档直接解析内容
+            return parser.parse(content, file_path=file_path)
+        elif document_type == DocumentType.PROMPT:
+            # Prompt文档直接解析内容
+            return parser.parse(content, file_path=file_path)
+        elif document_type in [DocumentType.PDF, DocumentType.WORD]:
+            # PDF和Word需要文件路径
             return parser.parse_from_file(file_path)
         else:
-            # 对于PDF和Word，使用文件路径
-            return parser.parse(file_path)
+            # Markdown等文本格式
+            return parser.parse(content, file_path=file_path)
+
+    async def _process_document_by_type(
+        self,
+        document: Document,
+        extract_requirements: bool
+    ) -> Dict[str, Any]:
+        """
+        根据文档类型进行不同的处理
+
+        Args:
+            document: 解析后的文档
+            extract_requirements: 是否提取需求
+
+        Returns:
+            Dict: 处理结果
+        """
+        result = {"document": document}
+
+        if document.document_type in [DocumentType.MARKDOWN, DocumentType.PDF, DocumentType.WORD]:
+            # 传统需求文档 - 提取需求
+            if extract_requirements:
+                requirements = await self._extract_requirements_from_document(document)
+                result["requirements"] = requirements
+                result["accuracy"] = self._estimate_accuracy(document, requirements)
+            result["document_category"] = "requirements"
+
+        elif document.document_type in [DocumentType.OPENAPI, DocumentType.SWAGGER, DocumentType.API_MARKDOWN]:
+            # API文档 - 提取API信息
+            api_document = getattr(document, 'api_document', None)
+            if api_document:
+                result["api_document"] = api_document
+                result["endpoints_count"] = len(api_document.endpoints)
+                result["parsing_accuracy"] = api_document.parsing_accuracy
+            result["document_category"] = "api"
+
+        elif document.document_type == DocumentType.PROMPT:
+            # Prompt文档 - 提取Prompt信息
+            prompt_document = getattr(document, 'prompt_document', None)
+            if prompt_document:
+                result["prompt_document"] = prompt_document
+                result["prompts_count"] = len(prompt_document.prompts)
+                result["test_cases_count"] = len(prompt_document.test_cases)
+                result["parsing_accuracy"] = prompt_document.parsing_accuracy
+            result["document_category"] = "prompt"
+
+        return result
     
-    async def _extract_requirements(
-        self, 
-        document: Document, 
-        extract_user_stories: bool
+    async def _extract_requirements_from_document(
+        self,
+        document: Document,
+        extract_user_stories: bool = True
     ) -> List[Requirement]:
         """
         从文档中提取需求

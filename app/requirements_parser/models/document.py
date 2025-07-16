@@ -14,6 +14,12 @@ class DocumentType(str, Enum):
     PDF = "pdf"
     WORD = "word"
     TXT = "txt"
+    # 新增API文档类型
+    OPENAPI = "openapi"
+    SWAGGER = "swagger"
+    API_MARKDOWN = "api_markdown"
+    # 新增Prompt文档类型
+    PROMPT = "prompt"
 
 class DocumentMetadata(BaseModel):
     """文档元数据模型"""
@@ -69,6 +75,10 @@ class Document(BaseModel):
         ".doc": DocumentType.WORD,
         ".docx": DocumentType.WORD,
         ".txt": DocumentType.TXT,
+        # API文档格式
+        ".json": DocumentType.OPENAPI,  # 默认JSON为OpenAPI
+        ".yaml": DocumentType.OPENAPI,
+        ".yml": DocumentType.OPENAPI,
     }
     
     @field_validator('title')

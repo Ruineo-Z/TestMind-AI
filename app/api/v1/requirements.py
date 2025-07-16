@@ -1,6 +1,6 @@
 """
-需求解析API端点
-提供文档解析和需求提取功能
+文档解析API端点
+提供多种文档类型的解析功能：需求文档、API文档、Prompt文档等
 """
 import tempfile
 import os
@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from app.requirements_parser.service import RequirementsParsingService
+from app.requirements_parser.service import DocumentParsingService
 from app.requirements_parser.models.document import DocumentType
 
 
@@ -21,12 +21,12 @@ SUPPORTED_FORMATS = {
     "markdown": {
         "extensions": [".md", ".markdown", ".mdown", ".mkd"],
         "mime_types": ["text/markdown", "text/x-markdown"],
-        "description": "Markdown格式文档"
+        "description": "Markdown格式文档（需求文档、API文档、Prompt文档）"
     },
     "pdf": {
         "extensions": [".pdf"],
         "mime_types": ["application/pdf"],
-        "description": "PDF格式文档"
+        "description": "PDF格式文档（需求文档）"
     },
     "word": {
         "extensions": [".docx", ".doc"],
@@ -34,7 +34,12 @@ SUPPORTED_FORMATS = {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword"
         ],
-        "description": "Microsoft Word文档"
+        "description": "Microsoft Word文档（需求文档）"
+    },
+    "openapi": {
+        "extensions": [".json", ".yaml", ".yml"],
+        "mime_types": ["application/json", "application/x-yaml", "text/yaml"],
+        "description": "OpenAPI/Swagger格式API文档"
     }
 }
 
@@ -60,31 +65,39 @@ def _get_file_type(filename: str) -> Optional[str]:
 
 
 @router.post("/parse")
-async def parse_requirements(
+async def parse_document(
     file: UploadFile = File(...),
-    extract_user_stories: bool = Form(default=True),
-    ai_provider: str = Form(default="mock"),
+    test_type: str = Form(...),
+    ai_provider: str = Form(default="gemini"),
     background_tasks: BackgroundTasks = None
 ) -> Dict[str, Any]:
     """
-    解析需求文档并提取需求
-    
+    解析文档并生成测试用例
+
     Args:
         file: 上传的文档文件
-        extract_user_stories: 是否提取用户故事
-        ai_provider: AI提供商 (openai, ollama, gemini, mock)
+        test_type: 测试类型 (api_test, prompt_test) - 必填
+        ai_provider: AI提供商 (openai, gemini, ollama, mock)
         background_tasks: 后台任务
-        
+
     Returns:
-        Dict: 解析结果，包含文档信息和提取的需求
-        
+        Dict: 解析结果，包含文档信息和测试相关数据
+
     Raises:
         HTTPException: 文件类型不支持或解析失败时抛出
     """
+    # 验证测试类型
+    valid_test_types = ["api_test", "prompt_test"]
+    if test_type not in valid_test_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的测试类型。支持的类型: {', '.join(valid_test_types)}"
+        )
+
     # 验证文件
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
-    
+
     # 检查文件类型
     file_type = _get_file_type(file.filename)
     if not file_type:
@@ -114,16 +127,32 @@ async def parse_requirements(
             temp_file_path = temp_file.name
         
         # 创建解析服务
-        parsing_service = RequirementsParsingService(ai_provider=ai_provider)
-        
-        # 解析文档和提取需求
+        parsing_service = DocumentParsingService(ai_provider=ai_provider)
+
+        # 根据测试类型确定文档类型和处理方式
+        if test_type == "api_test":
+            # API测试：优先检测OpenAPI格式，否则按API Markdown处理
+            doc_type = None  # 让系统自动检测API文档格式
+            extract_requirements = False  # API测试不需要提取需求
+        elif test_type == "prompt_test":
+            # Prompt测试：按Prompt文档处理
+            doc_type = DocumentType.PROMPT
+            extract_requirements = False  # Prompt测试不需要提取需求
+        else:
+            # 默认处理
+            doc_type = None
+            extract_requirements = True
+
+        # 解析文档
         result = await parsing_service.parse_document(
             file_path=temp_file_path,
-            extract_user_stories=extract_user_stories
+            document_type=doc_type,
+            extract_requirements=extract_requirements
         )
         
-        # 构建响应
+        # 构建响应（支持多种测试类型）
         response_data = {
+            "test_type": test_type,
             "document": {
                 "title": result["document"].title,
                 "content": result["document"].content,
@@ -133,7 +162,21 @@ async def parse_requirements(
                 "links": result["document"].links,
                 "user_stories": result["document"].user_stories
             },
-            "requirements": [
+            "document_category": result["document_category"],
+            "metadata": {
+                "file_name": file.filename,
+                "file_type": file_type,
+                "file_size": len(file_content),
+                "ai_provider": ai_provider,
+                "test_type": test_type,
+                "extraction_accuracy": result.get("accuracy", 0.0),
+                "processing_time": result.get("processing_time", 0.0)
+            }
+        }
+
+        # 根据文档类型添加特定数据
+        if "requirements" in result:
+            response_data["requirements"] = [
                 {
                     "id": req.id,
                     "title": req.title,
@@ -145,16 +188,72 @@ async def parse_requirements(
                     "extracted_by": req.extracted_by
                 }
                 for req in result["requirements"]
-            ],
-            "metadata": {
-                "file_name": file.filename,
-                "file_type": file_type,
-                "file_size": len(file_content),
-                "ai_provider": ai_provider,
-                "extraction_accuracy": result.get("accuracy", 0.0),
-                "processing_time": result.get("processing_time", 0.0)
+            ]
+
+        if "api_document" in result:
+            api_doc = result["api_document"]
+            response_data["api_document"] = {
+                "info": {
+                    "title": api_doc.info.title,
+                    "version": api_doc.info.version,
+                    "description": api_doc.info.description
+                },
+                "servers": [
+                    {"url": server.url, "description": server.description}
+                    for server in api_doc.servers
+                ],
+                "endpoints": [
+                    {
+                        "path": endpoint.path,
+                        "method": endpoint.method,
+                        "summary": endpoint.summary,
+                        "description": endpoint.description,
+                        "parameters": [
+                            {
+                                "name": param.name,
+                                "location": param.location,
+                                "type": param.type,
+                                "required": param.required,
+                                "description": param.description
+                            }
+                            for param in endpoint.parameters
+                        ],
+                        "responses": {
+                            status: {
+                                "description": resp.description,
+                                "content_type": resp.content_type
+                            }
+                            for status, resp in endpoint.responses.items()
+                        }
+                    }
+                    for endpoint in api_doc.endpoints
+                ]
             }
-        }
+
+        if "prompt_document" in result:
+            prompt_doc = result["prompt_document"]
+            response_data["prompt_document"] = {
+                "title": prompt_doc.title,
+                "description": prompt_doc.description,
+                "templates": [
+                    {
+                        "name": template.name,
+                        "content": template.content,
+                        "variables": template.variables,
+                        "description": template.description
+                    }
+                    for template in prompt_doc.templates
+                ],
+                "test_cases": [
+                    {
+                        "name": case.name,
+                        "input": case.input,
+                        "expected_output": case.expected_output,
+                        "description": case.description
+                    }
+                    for case in prompt_doc.test_cases
+                ]
+            }
         
         return response_data
         

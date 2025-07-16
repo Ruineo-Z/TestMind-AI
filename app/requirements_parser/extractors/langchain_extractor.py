@@ -9,6 +9,12 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from enum import Enum
 
+# 导入Pydantic（必需）
+from pydantic import BaseModel, Field
+
+# 导入环境配置
+from app.core.env_loader import load_env_config, get_ai_config
+
 # 导入LangChain相关模块
 try:
     # Ollama
@@ -21,8 +27,8 @@ try:
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
-    from pydantic import BaseModel, Field
     from langchain_core.runnables import RunnablePassthrough
+    LANGCHAIN_AVAILABLE = True
 except ImportError as e:
     print(f"LangChain导入错误: {e}")
     ChatOllama = None
@@ -33,9 +39,8 @@ except ImportError as e:
     ChatPromptTemplate = None
     JsonOutputParser = None
     StrOutputParser = None
-    BaseModel = None
-    Field = None
     RunnablePassthrough = None
+    LANGCHAIN_AVAILABLE = False
 
 from app.core.config import get_settings
 from app.requirements_parser.models.document import Document
@@ -63,10 +68,10 @@ class LangChainExtractor:
     """LangChain需求提取器，支持多种AI提供商"""
 
     def __init__(self,
-                 provider: AIProvider = AIProvider.OLLAMA,
+                 provider: AIProvider = AIProvider.GEMINI,
                  model: Optional[str] = None,
                  temperature: float = 0.1,
-                 ollama_url: str = "http://localhost:11434",
+                 ollama_url: Optional[str] = None,
                  openai_api_key: Optional[str] = None,
                  google_api_key: Optional[str] = None):
         """
@@ -76,17 +81,21 @@ class LangChainExtractor:
             provider: AI提供商 (openai, gemini, ollama)
             model: 模型名称
             temperature: 温度参数，控制输出随机性
-            ollama_url: Ollama服务地址
-            openai_api_key: OpenAI API密钥
-            google_api_key: Google API密钥
+            ollama_url: Ollama服务地址（可选，从.env读取）
+            openai_api_key: OpenAI API密钥（可选，从.env读取）
+            google_api_key: Google API密钥（可选，从.env读取）
         """
+        # 加载环境配置
+        load_env_config()
+        ai_config = get_ai_config()
+
         self.provider = provider
         self.temperature = temperature
-        self.ollama_url = ollama_url
 
-        # 设置API密钥
-        self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
-        self.google_api_key = google_api_key or os.environ.get("GOOGLE_API_KEY")
+        # 从环境配置获取设置
+        self.ollama_url = ollama_url or ai_config["ollama_base_url"]
+        self.openai_api_key = openai_api_key or ai_config["openai_api_key"]
+        self.google_api_key = google_api_key or ai_config["google_api_key"]
 
         # 根据提供商设置默认模型
         if model:
@@ -95,9 +104,9 @@ class LangChainExtractor:
             if provider == AIProvider.OPENAI:
                 self.model = "gpt-3.5-turbo"
             elif provider == AIProvider.GEMINI:
-                self.model = "gemini-1.5-pro"
+                self.model = ai_config.get("gemini_model", "gemini-1.5-flash")
             elif provider == AIProvider.OLLAMA:
-                self.model = "qwen2.5:3b"
+                self.model = ai_config["ollama_model"]
             else:
                 self.model = "llama3"
 
