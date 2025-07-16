@@ -1,134 +1,195 @@
 """
-LangChain需求提取器
-支持多种AI模型：OpenAI、Ollama、Gemini等
+真正的LangChain需求提取器
+使用LangChain框架实现AI驱动的需求提取，支持OpenAI、Gemini、Ollama三个供应商
 """
 import json
 import asyncio
-import requests
-from typing import List, Dict, Any, Optional
+import os
 from datetime import datetime
+from typing import List, Dict, Optional, Any
 from enum import Enum
 
+# 导入LangChain相关模块
 try:
-    import openai
-    from openai import AsyncOpenAI
-except ImportError:
-    openai = None
-    AsyncOpenAI = None
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+    # Ollama
+    from langchain_ollama import ChatOllama
+    # OpenAI
+    from langchain_openai import ChatOpenAI
+    # Google Gemini
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    # Core components
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+    from pydantic import BaseModel, Field
+    from langchain_core.runnables import RunnablePassthrough
+except ImportError as e:
+    print(f"LangChain导入错误: {e}")
+    ChatOllama = None
+    ChatOpenAI = None
+    ChatGoogleGenerativeAI = None
+    HumanMessage = None
+    SystemMessage = None
+    ChatPromptTemplate = None
+    JsonOutputParser = None
+    StrOutputParser = None
+    BaseModel = None
+    Field = None
+    RunnablePassthrough = None
 
 from app.core.config import get_settings
 from app.requirements_parser.models.document import Document
-from app.requirements_parser.models.requirement import (
-    Requirement, RequirementType, Priority, RequirementCollection
-)
+from app.requirements_parser.models.requirement import Requirement, RequirementType, Priority, RequirementCollection
+
 
 class AIProvider(str, Enum):
     """AI提供商枚举"""
     OPENAI = "openai"
-    OLLAMA = "ollama"
     GEMINI = "gemini"
-    MOCK = "mock"  # 用于测试
+    OLLAMA = "ollama"
+
+
+class RequirementSchema(BaseModel):
+    """需求数据结构"""
+    id: str = Field(description="需求ID")
+    title: str = Field(description="需求标题")
+    description: str = Field(description="需求描述")
+    type: str = Field(description="需求类型: functional, non_functional, constraint")
+    priority: str = Field(description="优先级: low, medium, high, critical")
+    acceptance_criteria: List[str] = Field(description="验收标准列表")
+
 
 class LangChainExtractor:
-    """多AI提供商需求提取器"""
+    """LangChain需求提取器，支持多种AI提供商"""
 
     def __init__(self,
                  provider: AIProvider = AIProvider.OLLAMA,
-                 api_key: Optional[str] = None,
                  model: Optional[str] = None,
-                 ollama_url: str = "http://localhost:11434"):
+                 temperature: float = 0.1,
+                 ollama_url: str = "http://localhost:11434",
+                 openai_api_key: Optional[str] = None,
+                 google_api_key: Optional[str] = None):
         """
         初始化需求提取器
 
         Args:
-            provider: AI提供商
-            api_key: API密钥（OpenAI/Gemini需要）
+            provider: AI提供商 (openai, gemini, ollama)
             model: 模型名称
+            temperature: 温度参数，控制输出随机性
             ollama_url: Ollama服务地址
+            openai_api_key: OpenAI API密钥
+            google_api_key: Google API密钥
         """
         self.provider = provider
+        self.temperature = temperature
         self.ollama_url = ollama_url
-        settings = get_settings()
 
-        # 根据提供商初始化
-        if provider == AIProvider.OPENAI:
-            if openai is None:
-                raise ImportError("需要安装openai库: pip install openai")
-            self.api_key = api_key or settings.openai_api_key
-            if not self.api_key:
-                raise ValueError("未设置OpenAI API密钥")
-            self.client = AsyncOpenAI(api_key=self.api_key)
-            self.model = model or "gpt-3.5-turbo"
+        # 设置API密钥
+        self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
+        self.google_api_key = google_api_key or os.environ.get("GOOGLE_API_KEY")
 
-        elif provider == AIProvider.GEMINI:
-            if genai is None:
-                raise ImportError("需要安装google-generativeai库: pip install google-generativeai")
-            self.api_key = api_key or getattr(settings, 'gemini_api_key', None)
-            if not self.api_key:
-                raise ValueError("未设置Gemini API密钥")
-            genai.configure(api_key=self.api_key)
-            self.model = model or "gemini-pro"
-
-        elif provider == AIProvider.OLLAMA:
-            # Ollama不需要API密钥
-            self.model = model or "llama2"
-            self.api_key = None
-
-        elif provider == AIProvider.MOCK:
-            # 测试模式
-            self.api_key = api_key or "mock-key"
-            self.model = model or "mock-model"
-
-        # 通用配置
-        self.temperature = 0.1
-        self.max_tokens = 2000
-        
-        # 根据AI提供商优化提示词
-        if provider == AIProvider.OLLAMA:
-            # Ollama模型（特别是中文模型）需要更简洁明确的指令
-            self.system_prompt = """你是需求分析师。从文档提取需求，输出JSON格式。
-
-格式：[{"id":"REQ-001","title":"标题","description":"描述","type":"functional","priority":"medium","acceptance_criteria":["标准1"]}]
-
-规则：
-1. 只输出JSON，不要其他内容
-2. type只能是：functional, non_functional, user_story
-3. priority只能是：critical, high, medium, low
-4. 每个需求包含所有字段
-
-示例：
-[{"id":"REQ-001","title":"用户登录","description":"用户通过邮箱密码登录","type":"functional","priority":"high","acceptance_criteria":["支持邮箱登录","密码验证"]}]"""
+        # 根据提供商设置默认模型
+        if model:
+            self.model = model
         else:
-            # OpenAI/Gemini使用原始提示词
-            self.system_prompt = """你是一个专业的需求分析师，擅长从文档中提取和分析软件需求。
+            if provider == AIProvider.OPENAI:
+                self.model = "gpt-3.5-turbo"
+            elif provider == AIProvider.GEMINI:
+                self.model = "gemini-1.5-pro"
+            elif provider == AIProvider.OLLAMA:
+                self.model = "qwen2.5:3b"
+            else:
+                self.model = "llama3"
 
-请从给定的文档中提取需求信息，并按照以下JSON格式返回：
+        # 初始化LangChain组件
+        self._setup_langchain()
 
+    def _setup_langchain(self):
+        """设置LangChain组件"""
+        # 根据提供商初始化LLM
+        if self.provider == AIProvider.OPENAI:
+            if not self.openai_api_key:
+                raise ValueError("使用OpenAI提供商需要提供API密钥")
+
+            self.llm = ChatOpenAI(
+                model=self.model,
+                temperature=self.temperature,
+                api_key=self.openai_api_key
+            )
+
+        elif self.provider == AIProvider.GEMINI:
+            if not self.google_api_key:
+                raise ValueError("使用Gemini提供商需要提供Google API密钥")
+
+            self.llm = ChatGoogleGenerativeAI(
+                model=self.model,
+                temperature=self.temperature,
+                google_api_key=self.google_api_key
+            )
+
+        elif self.provider == AIProvider.OLLAMA:
+            self.llm = ChatOllama(
+                model=self.model,
+                temperature=self.temperature,
+                base_url=self.ollama_url
+            )
+
+        else:
+            raise ValueError(f"不支持的AI提供商: {self.provider}")
+
+        # 设置输出解析器
+        self.output_parser = JsonOutputParser(pydantic_object=RequirementSchema)
+
+        # 设置提示词模板
+        self.prompt_template = ChatPromptTemplate.from_messages([
+            ("system", self._get_system_prompt()),
+            ("human", self._get_user_prompt_template())
+        ])
+
+        # 构建LangChain链
+        self.chain = (
+            self.prompt_template
+            | self.llm
+            | self.output_parser
+        )
+    
+    def _get_system_prompt(self) -> str:
+        """获取系统提示词"""
+        return """你是一个专业的需求分析师。你的任务是从给定的文档中提取软件需求。
+
+请严格按照以下JSON格式返回需求列表：
 [
-    {
-        "id": "需求唯一标识符（如REQ-001）",
+    {{
+        "id": "REQ-001",
         "title": "需求标题",
-        "description": "需求详细描述",
-        "type": "需求类型（functional/non_functional/user_story/business_rule/constraint/assumption）",
-        "priority": "优先级（critical/high/medium/low）",
-        "acceptance_criteria": ["验收标准1", "验收标准2", "..."]
-    }
+        "description": "详细的需求描述",
+        "type": "functional",
+        "priority": "medium",
+        "acceptance_criteria": ["验收标准1", "验收标准2"]
+    }}
 ]
 
-提取规则：
-1. 识别所有明确的功能需求、非功能需求和用户故事
-2. 为每个需求生成唯一的ID
-3. 提取验收标准或成功条件
-4. 根据重要性评估优先级
-5. 确保描述清晰、具体、可测试
-6. 只返回JSON格式，不要添加其他文本"""
-        
-        self.user_prompt_template = """请分析以下文档并提取需求：
+需求类型包括：
+- functional: 功能性需求
+- non_functional: 非功能性需求
+- constraint: 约束条件
+
+优先级包括：
+- low: 低优先级
+- medium: 中等优先级
+- high: 高优先级
+- critical: 关键优先级
+
+请确保：
+1. 每个需求都有唯一的ID
+2. 标题简洁明了
+3. 描述详细准确
+4. 验收标准具体可测试
+5. 只返回JSON格式，不要其他文字"""
+    
+    def _get_user_prompt_template(self) -> str:
+        """获取用户提示词模板"""
+        return """请分析以下文档并提取需求：
 
 文档标题：{title}
 文档内容：
@@ -136,261 +197,145 @@ class LangChainExtractor:
 
 请严格按照JSON格式返回提取的需求列表。"""
     
-    async def _call_ai_api(self, messages: List[Dict[str, str]]) -> str:
-        """
-        调用AI API（支持多提供商）
-
-        Args:
-            messages: 消息列表
-
-        Returns:
-            str: AI响应内容
-        """
-        if self.provider == AIProvider.OPENAI:
-            return await self._call_openai_api(messages)
-        elif self.provider == AIProvider.OLLAMA:
-            return await self._call_ollama_api(messages)
-        elif self.provider == AIProvider.GEMINI:
-            return await self._call_gemini_api(messages)
-        elif self.provider == AIProvider.MOCK:
-            return await self._call_mock_api(messages)
-        else:
-            raise ValueError(f"不支持的AI提供商: {self.provider}")
-
-    async def _call_openai_api(self, messages: List[Dict[str, str]]) -> str:
-        """调用OpenAI API"""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens
-        )
-        return response.choices[0].message.content
-
-    async def _call_ollama_api(self, messages: List[Dict[str, str]]) -> str:
-        """调用Ollama API"""
-        # 构建Ollama请求
-        prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
-
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": self.temperature,
-                "num_predict": self.max_tokens
-            }
-        }
-
-        # 异步HTTP请求
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self.ollama_url}/api/generate", json=payload) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    return result.get("response", "")
-                else:
-                    raise Exception(f"Ollama API错误: {response.status}")
-
-    async def _call_gemini_api(self, messages: List[Dict[str, str]]) -> str:
-        """调用Gemini API"""
-        model = genai.GenerativeModel(self.model)
-
-        # 构建Gemini提示词
-        prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
-
-        response = await model.generate_content_async(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=self.temperature,
-                max_output_tokens=self.max_tokens
-            )
-        )
-        return response.text
-
-    async def _call_mock_api(self, messages: List[Dict[str, str]]) -> str:
-        """模拟API调用（用于测试）"""
-        # 返回模拟的需求提取结果
-        return '''[
-            {
-                "id": "REQ-001",
-                "title": "模拟需求",
-                "description": "这是一个模拟的需求提取结果",
-                "type": "functional",
-                "priority": "medium",
-                "acceptance_criteria": ["模拟验收标准1", "模拟验收标准2"]
-            }
-        ]'''
-
     async def extract_async(self, document: Document, custom_prompt: Optional[str] = None) -> List[Requirement]:
         """
         异步提取需求
-
-        Args:
-            document: 要分析的文档
-            custom_prompt: 自定义提示词
-
-        Returns:
-            List[Requirement]: 提取的需求列表
-
-        Raises:
-            Exception: 提取失败时抛出
-        """
-        try:
-            # 构建提示词
-            user_prompt = custom_prompt or self.user_prompt_template.format(
-                title=document.title,
-                content=document.content
-            )
-
-            # 构建消息
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-
-            # 调用AI API
-            content = await self._call_ai_api(messages)
-
-            # 清理和解析响应
-            requirements_data = self._parse_ai_response(content)
-
-            # 转换为Requirement对象
-            requirements = []
-            for req_data in requirements_data:
-                requirement = Requirement(
-                    id=req_data.get("id", f"REQ-{len(requirements)+1:03d}"),
-                    title=req_data.get("title", ""),
-                    description=req_data.get("description", ""),
-                    type=RequirementType(req_data.get("type", "functional")),
-                    priority=Priority(req_data.get("priority", "medium")),
-                    acceptance_criteria=req_data.get("acceptance_criteria", []),
-                    source_document=document.title,
-                    extracted_by=f"{self.provider}_extractor",
-                    created_at=datetime.now()
-                )
-                requirements.append(requirement)
-
-            return requirements
-
-        except json.JSONDecodeError as e:
-            raise Exception(f"需求提取失败：JSON解析错误 - {e}")
-        except Exception as e:
-            raise Exception(f"需求提取失败：{e}")
-
-    def _parse_ai_response(self, content: str) -> List[Dict[str, Any]]:
-        """
-        解析AI响应内容，处理各种格式问题
-
-        Args:
-            content: AI返回的原始内容
-
-        Returns:
-            List[Dict]: 解析后的需求数据
-        """
-        if not content or not content.strip():
-            return []
-
-        # 清理内容
-        cleaned_content = content.strip()
-
-        # 移除可能的思考过程标记（qwen模型特有）
-        if "<think>" in cleaned_content:
-            # 提取</think>之后的内容
-            think_end = cleaned_content.find("</think>")
-            if think_end != -1:
-                cleaned_content = cleaned_content[think_end + 8:].strip()
-
-        # 移除markdown代码块标记
-        if cleaned_content.startswith("```json"):
-            cleaned_content = cleaned_content[7:]
-        if cleaned_content.startswith("```"):
-            cleaned_content = cleaned_content[3:]
-        if cleaned_content.endswith("```"):
-            cleaned_content = cleaned_content[:-3]
-
-        cleaned_content = cleaned_content.strip()
-
-        # 尝试直接解析JSON
-        try:
-            return json.loads(cleaned_content)
-        except json.JSONDecodeError:
-            pass
-
-        # 尝试提取JSON数组
-        import re
-        json_pattern = r'\[.*?\]'
-        json_matches = re.findall(json_pattern, cleaned_content, re.DOTALL)
-
-        for match in json_matches:
-            try:
-                return json.loads(match)
-            except json.JSONDecodeError:
-                continue
-
-        # 尝试提取单个JSON对象并包装成数组
-        json_pattern = r'\{.*?\}'
-        json_matches = re.findall(json_pattern, cleaned_content, re.DOTALL)
-
-        if json_matches:
-            objects = []
-            for match in json_matches:
-                try:
-                    obj = json.loads(match)
-                    objects.append(obj)
-                except json.JSONDecodeError:
-                    continue
-            if objects:
-                return objects
-
-        # 如果所有解析都失败，返回空列表并记录原始内容
-        print(f"⚠️ JSON解析失败，原始内容: {cleaned_content[:200]}...")
-        return []
-    
-    def extract(self, document: Document, custom_prompt: Optional[str] = None) -> List[Requirement]:
-        """
-        同步提取需求（内部调用异步方法）
         
         Args:
             document: 要分析的文档
-            custom_prompt: 自定义提示词
+            custom_prompt: 自定义提示词（暂不支持）
+            
+        Returns:
+            List[Requirement]: 提取的需求列表
+        """
+        try:
+            # 准备输入数据
+            input_data = {
+                "title": document.title,
+                "content": document.content
+            }
+            
+            # 使用LangChain链进行处理
+            result = await self.chain.ainvoke(input_data)
+            
+            # 如果结果是字符串，尝试解析JSON
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                except json.JSONDecodeError:
+                    # 尝试提取JSON部分
+                    import re
+
+                    # 移除<think>...</think>标签
+                    result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL)
+
+                    # 尝试提取JSON数组
+                    json_match = re.search(r'\[.*\]', result, re.DOTALL)
+                    if json_match:
+                        try:
+                            result = json.loads(json_match.group())
+                        except json.JSONDecodeError:
+                            # 如果仍然无法解析，尝试清理JSON字符串
+                            json_str = json_match.group()
+                            # 移除可能的注释或多余文本
+                            json_str = re.sub(r'//.*?$', '', json_str, flags=re.MULTILINE)
+                            json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
+                            try:
+                                result = json.loads(json_str)
+                            except json.JSONDecodeError:
+                                raise Exception("无法解析AI响应中的JSON")
+                    else:
+                        raise Exception("无法在AI响应中找到JSON数组")
+            
+            # 转换为Requirement对象
+            requirements = []
+            if isinstance(result, list):
+                for req_data in result:
+                    requirement = Requirement(
+                        id=req_data.get("id", f"REQ-{len(requirements)+1:03d}"),
+                        title=req_data.get("title", ""),
+                        description=req_data.get("description", ""),
+                        type=RequirementType(req_data.get("type", "functional")),
+                        priority=Priority(req_data.get("priority", "medium")),
+                        acceptance_criteria=req_data.get("acceptance_criteria", []),
+                        source_document=document.title,
+                        extracted_by=f"langchain_{self.provider.value}_extractor",
+                        created_at=datetime.now()
+                    )
+                    requirements.append(requirement)
+            
+            return requirements
+            
+        except Exception as e:
+            raise Exception(f"LangChain需求提取失败：{e}")
+    
+    def extract(self, document: Document, custom_prompt: Optional[str] = None) -> List[Requirement]:
+        """
+        同步提取需求
+        
+        Args:
+            document: 要分析的文档
+            custom_prompt: 自定义提示词（暂不支持）
             
         Returns:
             List[Requirement]: 提取的需求列表
         """
         return asyncio.run(self.extract_async(document, custom_prompt))
     
-    async def extract_with_accuracy(self, document: Document, expected_count: Optional[int] = None) -> Dict[str, Any]:
+    async def extract_with_accuracy(self, document: Document, expected_count: int = None) -> Dict[str, Any]:
         """
         提取需求并计算准确率
         
         Args:
             document: 要分析的文档
-            expected_count: 预期需求数量（用于准确率计算）
+            expected_count: 预期需求数量
             
         Returns:
-            Dict: 包含需求列表、准确率和置信度的结果
+            Dict: 包含需求列表和准确率信息
         """
         requirements = await self.extract_async(document)
+        extracted_count = len(requirements)
         
         # 计算准确率
-        accuracy = 1.0  # 默认准确率
         if expected_count is not None:
-            extracted_count = len(requirements)
-            # 简单的准确率计算：提取数量与预期数量的比值
             accuracy = min(extracted_count / expected_count, 1.0) if expected_count > 0 else 0.0
+        else:
+            accuracy = 1.0  # 没有预期数量时默认为100%
         
-        # 计算平均置信度
-        confidence_scores = [req.confidence_score for req in requirements if req.confidence_score is not None]
-        average_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.8
+        # 计算置信度（基于需求的完整性）
+        confidence = self._calculate_confidence(requirements)
         
         return {
             "requirements": requirements,
+            "extracted_count": extracted_count,
+            "expected_count": expected_count,
             "accuracy": accuracy,
-            "confidence": average_confidence,
-            "extracted_count": len(requirements),
-            "expected_count": expected_count
+            "confidence": confidence
         }
+    
+    def _calculate_confidence(self, requirements: List[Requirement]) -> float:
+        """计算置信度"""
+        if not requirements:
+            return 0.0
+        
+        total_score = 0
+        for req in requirements:
+            score = 0
+            # 检查各个字段的完整性
+            if req.title and len(req.title.strip()) > 0:
+                score += 0.3
+            if req.description and len(req.description.strip()) > 0:
+                score += 0.3
+            if req.acceptance_criteria and len(req.acceptance_criteria) > 0:
+                score += 0.4
+            
+            total_score += score
+        
+        return total_score / len(requirements)
+    
+    def create_requirement_collection(self, requirements: List[Requirement]) -> RequirementCollection:
+        """创建需求集合"""
+        return RequirementCollection(requirements=requirements)
     
     async def extract_batch(self, documents: List[Document]) -> Dict[str, List[Requirement]]:
         """
@@ -404,97 +349,43 @@ class LangChainExtractor:
         """
         results = {}
         
-        # 并发处理多个文档
-        tasks = []
-        for doc in documents:
-            task = self.extract_async(doc)
-            tasks.append((doc.title, task))
+        # 并发处理所有文档
+        tasks = [self.extract_async(doc) for doc in documents]
+        requirements_lists = await asyncio.gather(*tasks)
         
-        # 等待所有任务完成
-        for title, task in tasks:
-            try:
-                requirements = await task
-                results[title] = requirements
-            except Exception as e:
-                results[title] = []
-                print(f"文档 {title} 提取失败: {e}")
+        # 构建结果字典
+        for doc, requirements in zip(documents, requirements_lists):
+            results[doc.title] = requirements
         
         return results
     
-    def create_requirement_collection(self, requirements: List[Requirement]) -> RequirementCollection:
-        """
-        创建需求集合
-        
-        Args:
-            requirements: 需求列表
-            
-        Returns:
-            RequirementCollection: 需求集合对象
-        """
-        collection = RequirementCollection()
-        
-        for req in requirements:
-            collection.add_requirement(req)
-        
-        return collection
-    
     def validate_extraction_quality(self, requirements: List[Requirement]) -> Dict[str, Any]:
-        """
-        验证提取质量
-        
-        Args:
-            requirements: 需求列表
-            
-        Returns:
-            Dict: 质量评估结果
-        """
-        if not requirements:
-            return {
-                "quality_score": 0.0,
-                "issues": ["未提取到任何需求"],
-                "recommendations": ["检查文档内容是否包含需求信息"]
-            }
-        
+        """验证提取质量"""
         issues = []
         recommendations = []
-        quality_score = 1.0
         
-        # 检查需求完整性
         for req in requirements:
-            if not req.title.strip():
-                issues.append(f"需求 {req.id} 缺少标题")
-                quality_score -= 0.1
+            # 检查标题
+            if not req.title or len(req.title.strip()) < 3:
+                issues.append(f"需求 {req.id} 标题过短或为空")
+                recommendations.append(f"为需求 {req.id} 提供更详细的标题")
             
-            if not req.description.strip():
-                issues.append(f"需求 {req.id} 缺少描述")
-                quality_score -= 0.1
+            # 检查描述
+            if not req.description or len(req.description.strip()) < 10:
+                issues.append(f"需求 {req.id} 描述过短或为空")
+                recommendations.append(f"为需求 {req.id} 提供更详细的描述")
             
-            if not req.acceptance_criteria:
+            # 检查验收标准
+            if not req.acceptance_criteria or len(req.acceptance_criteria) == 0:
                 issues.append(f"需求 {req.id} 缺少验收标准")
-                quality_score -= 0.05
+                recommendations.append(f"为需求 {req.id} 添加具体的验收标准")
         
-        # 检查需求类型分布
-        type_counts = {}
-        for req in requirements:
-            type_counts[req.type] = type_counts.get(req.type, 0) + 1
-        
-        if len(type_counts) == 1:
-            recommendations.append("考虑是否遗漏了其他类型的需求")
-        
-        # 检查优先级分布
-        priority_counts = {}
-        for req in requirements:
-            priority_counts[req.priority] = priority_counts.get(req.priority, 0) + 1
-        
-        if len(priority_counts) == 1:
-            recommendations.append("考虑重新评估需求优先级")
-        
-        quality_score = max(0.0, quality_score)
+        # 计算质量分数
+        total_checks = len(requirements) * 3  # 每个需求检查3个方面
+        quality_score = max(0, (total_checks - len(issues)) / total_checks) if total_checks > 0 else 0
         
         return {
             "quality_score": quality_score,
             "issues": issues,
-            "recommendations": recommendations,
-            "type_distribution": type_counts,
-            "priority_distribution": priority_counts
+            "recommendations": recommendations
         }

@@ -211,3 +211,6 @@ test_reports/
 docs/
 .vscode/
 uv.lock
+
+# YoYo AI version control directory
+.yoyo/

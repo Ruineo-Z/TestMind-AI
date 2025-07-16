@@ -4,9 +4,9 @@
   "metadata": {
     "version": "2.0.0",
     "description": "project 级资源注册表",
-    "createdAt": "2025-07-15T06:48:26.772Z",
-    "updatedAt": "2025-07-15T06:48:26.776Z",
-    "resourceCount": 8
+    "createdAt": "2025-07-16T01:39:24.490Z",
+    "updatedAt": "2025-07-16T01:39:25.101Z",
+    "resourceCount": 11
   },
   "resources": [
     {
@@ -17,9 +17,9 @@
       "description": "执行模式，定义具体的行为模式",
       "reference": "@project://.promptx/resource/role/project-manager/execution/project-management-workflow.execution.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.774Z",
-        "updatedAt": "2025-07-15T06:48:26.774Z",
-        "scannedAt": "2025-07-15T06:48:26.774Z",
+        "createdAt": "2025-07-16T01:39:24.541Z",
+        "updatedAt": "2025-07-16T01:39:24.541Z",
+        "scannedAt": "2025-07-16T01:39:24.541Z",
         "path": "role/project-manager/execution/project-management-workflow.execution.md"
       }
     },
@@ -31,9 +31,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/project-manager/project-manager.role.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.774Z",
-        "updatedAt": "2025-07-15T06:48:26.774Z",
-        "scannedAt": "2025-07-15T06:48:26.774Z",
+        "createdAt": "2025-07-16T01:39:24.563Z",
+        "updatedAt": "2025-07-16T01:39:24.563Z",
+        "scannedAt": "2025-07-16T01:39:24.563Z",
         "path": "role/project-manager/project-manager.role.md"
       }
     },
@@ -45,10 +45,52 @@
       "description": "思维模式，指导AI的思考方式",
       "reference": "@project://.promptx/resource/role/project-manager/thought/project-thinking.thought.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.775Z",
-        "updatedAt": "2025-07-15T06:48:26.775Z",
-        "scannedAt": "2025-07-15T06:48:26.775Z",
+        "createdAt": "2025-07-16T01:39:24.615Z",
+        "updatedAt": "2025-07-16T01:39:24.616Z",
+        "scannedAt": "2025-07-16T01:39:24.615Z",
         "path": "role/project-manager/thought/project-thinking.thought.md"
+      }
+    },
+    {
+      "id": "python-workflow",
+      "source": "project",
+      "protocol": "execution",
+      "name": "Python Workflow 执行模式",
+      "description": "执行模式，定义具体的行为模式",
+      "reference": "@project://.promptx/resource/role/python-developer/execution/python-workflow.execution.md",
+      "metadata": {
+        "createdAt": "2025-07-16T01:39:24.796Z",
+        "updatedAt": "2025-07-16T01:39:24.796Z",
+        "scannedAt": "2025-07-16T01:39:24.796Z",
+        "path": "role/python-developer/execution/python-workflow.execution.md"
+      }
+    },
+    {
+      "id": "python-developer",
+      "source": "project",
+      "protocol": "role",
+      "name": "Python Developer 角色",
+      "description": "专业角色，提供特定领域的专业能力",
+      "reference": "@project://.promptx/resource/role/python-developer/python-developer.role.md",
+      "metadata": {
+        "createdAt": "2025-07-16T01:39:24.894Z",
+        "updatedAt": "2025-07-16T01:39:24.894Z",
+        "scannedAt": "2025-07-16T01:39:24.894Z",
+        "path": "role/python-developer/python-developer.role.md"
+      }
+    },
+    {
+      "id": "python-thinking",
+      "source": "project",
+      "protocol": "thought",
+      "name": "Python Thinking 思维模式",
+      "description": "思维模式，指导AI的思考方式",
+      "reference": "@project://.promptx/resource/role/python-developer/thought/python-thinking.thought.md",
+      "metadata": {
+        "createdAt": "2025-07-16T01:39:24.926Z",
+        "updatedAt": "2025-07-16T01:39:24.926Z",
+        "scannedAt": "2025-07-16T01:39:24.926Z",
+        "path": "role/python-developer/thought/python-thinking.thought.md"
       }
     },
     {
@@ -59,9 +101,9 @@
       "description": "执行模式，定义具体的行为模式",
       "reference": "@project://.promptx/resource/role/senior-python-expert/execution/python-development-workflow.execution.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.775Z",
-        "updatedAt": "2025-07-15T06:48:26.775Z",
-        "scannedAt": "2025-07-15T06:48:26.775Z",
+        "createdAt": "2025-07-16T01:39:25.003Z",
+        "updatedAt": "2025-07-16T01:39:25.003Z",
+        "scannedAt": "2025-07-16T01:39:25.003Z",
         "path": "role/senior-python-expert/execution/python-development-workflow.execution.md"
       }
     },
@@ -73,9 +115,9 @@
       "description": "执行模式，定义具体的行为模式",
       "reference": "@project://.promptx/resource/role/senior-python-expert/execution/tdd-best-practices.execution.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.775Z",
-        "updatedAt": "2025-07-15T06:48:26.775Z",
-        "scannedAt": "2025-07-15T06:48:26.775Z",
+        "createdAt": "2025-07-16T01:39:25.019Z",
+        "updatedAt": "2025-07-16T01:39:25.019Z",
+        "scannedAt": "2025-07-16T01:39:25.019Z",
         "path": "role/senior-python-expert/execution/tdd-best-practices.execution.md"
       }
     },
@@ -87,9 +129,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/senior-python-expert/senior-python-expert.role.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.776Z",
-        "updatedAt": "2025-07-15T06:48:26.776Z",
-        "scannedAt": "2025-07-15T06:48:26.776Z",
+        "createdAt": "2025-07-16T01:39:25.046Z",
+        "updatedAt": "2025-07-16T01:39:25.047Z",
+        "scannedAt": "2025-07-16T01:39:25.046Z",
         "path": "role/senior-python-expert/senior-python-expert.role.md"
       }
     },
@@ -101,9 +143,9 @@
       "description": "思维模式，指导AI的思考方式",
       "reference": "@project://.promptx/resource/role/senior-python-expert/thought/senior-developer-mindset.thought.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.776Z",
-        "updatedAt": "2025-07-15T06:48:26.776Z",
-        "scannedAt": "2025-07-15T06:48:26.776Z",
+        "createdAt": "2025-07-16T01:39:25.080Z",
+        "updatedAt": "2025-07-16T01:39:25.080Z",
+        "scannedAt": "2025-07-16T01:39:25.080Z",
         "path": "role/senior-python-expert/thought/senior-developer-mindset.thought.md"
       }
     },
@@ -115,22 +157,22 @@
       "description": "思维模式，指导AI的思考方式",
       "reference": "@project://.promptx/resource/role/senior-python-expert/thought/tdd-philosophy.thought.md",
       "metadata": {
-        "createdAt": "2025-07-15T06:48:26.776Z",
-        "updatedAt": "2025-07-15T06:48:26.776Z",
-        "scannedAt": "2025-07-15T06:48:26.776Z",
+        "createdAt": "2025-07-16T01:39:25.092Z",
+        "updatedAt": "2025-07-16T01:39:25.092Z",
+        "scannedAt": "2025-07-16T01:39:25.092Z",
         "path": "role/senior-python-expert/thought/tdd-philosophy.thought.md"
       }
     }
   ],
   "stats": {
-    "totalResources": 8,
+    "totalResources": 11,
     "byProtocol": {
-      "execution": 3,
-      "role": 2,
-      "thought": 3
+      "execution": 4,
+      "role": 3,
+      "thought": 4
     },
     "bySource": {
-      "project": 8
+      "project": 11
     }
   }
 }

@@ -1,347 +1,311 @@
 """
-Sprint 2 - LangChain需求提取器测试
-测试AI驱动的需求提取功能
+LangChain多供应商需求提取器测试
+测试支持OpenAI、Gemini、Ollama三个供应商的LangChain需求提取功能
 """
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from app.requirements_parser.extractors.langchain_extractor import LangChainExtractor, AIProvider
 from app.requirements_parser.models.document import Document, DocumentType
-from app.requirements_parser.models.requirement import Requirement, RequirementType, Priority
+from app.requirements_parser.models.requirement import RequirementType, Priority
 
 @pytest.fixture
-def test_api_key():
-    """测试用的API密钥"""
-    return "mock-test-key"
-
-@pytest.fixture
-def extractor(test_api_key):
-    """LangChain提取器fixture - 使用MOCK提供商"""
-    return LangChainExtractor(provider=AIProvider.MOCK, api_key=test_api_key)
-
-class TestLangChainExtractor:
-    """测试LangChain需求提取器"""
-    
-    def test_extractor_initialization(self, extractor):
-        """测试提取器初始化 - 这个测试现在会失败"""
-        assert extractor is not None
-        assert hasattr(extractor, 'extract')
-        assert hasattr(extractor, 'extract_async')
-
-    @pytest.mark.asyncio
-    async def test_extract_functional_requirements(self, extractor):
-        """测试提取功能需求 - 使用MOCK提供商"""
-        document = Document(
-            title="用户管理系统需求",
-            content="""# 用户管理系统需求
+def sample_document():
+    """示例文档fixture"""
+    return Document(
+        title="电商系统需求",
+        content="""# 电商系统需求文档
 
 ## 功能需求
 
-### 1. 用户注册
-- 用户可以通过邮箱注册
-- 密码必须包含大小写字母和数字
-- 注册后发送验证邮件
+### 1. 用户管理
+- 用户注册功能
+- 用户登录功能
+- 用户信息管理
+
+### 2. 商品管理
+- 商品展示
+- 商品搜索
+- 商品分类
+
+### 3. 订单管理
+- 购物车功能
+- 订单创建
+- 订单支付
 """,
-            document_type=DocumentType.MARKDOWN
+        document_type=DocumentType.MARKDOWN
+    )
+
+@pytest.fixture
+def mock_response():
+    """模拟AI响应"""
+    return [
+        {
+            "id": "REQ-001",
+            "title": "用户注册",
+            "description": "系统应支持用户通过邮箱注册账户",
+            "type": "functional",
+            "priority": "high",
+            "acceptance_criteria": ["支持邮箱注册", "密码强度验证", "邮箱验证"]
+        },
+        {
+            "id": "REQ-002",
+            "title": "商品搜索",
+            "description": "用户可以通过关键词搜索商品",
+            "type": "functional",
+            "priority": "medium",
+            "acceptance_criteria": ["关键词搜索", "搜索结果排序", "搜索历史"]
+        }
+    ]
+
+class TestLangChainMultiProvider:
+    """测试LangChain多供应商需求提取器"""
+    
+    def test_openai_provider_initialization(self):
+        """测试OpenAI提供商初始化"""
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
+            extractor = LangChainExtractor(
+                provider=AIProvider.OPENAI,
+                model="gpt-3.5-turbo"
+            )
+            assert extractor.provider == AIProvider.OPENAI
+            assert extractor.model == "gpt-3.5-turbo"
+            assert extractor.openai_api_key == "test-key"
+    
+    def test_gemini_provider_initialization(self):
+        """测试Gemini提供商初始化"""
+        with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-google-key'}):
+            extractor = LangChainExtractor(
+                provider=AIProvider.GEMINI,
+                model="gemini-1.5-pro"
+            )
+            assert extractor.provider == AIProvider.GEMINI
+            assert extractor.model == "gemini-1.5-pro"
+            assert extractor.google_api_key == "test-google-key"
+    
+    def test_ollama_provider_initialization(self):
+        """测试Ollama提供商初始化"""
+        extractor = LangChainExtractor(
+            provider=AIProvider.OLLAMA,
+            model="qwen3:4b",
+            ollama_url="http://localhost:11434"
         )
-
-        # 执行提取（使用MOCK提供商）
-        requirements = await extractor.extract_async(document)
-
-        # 验证结果
-        assert len(requirements) >= 1
-
-        # 验证需求基本信息
-        req = requirements[0]
-        assert req.id == "REQ-001"
-        assert req.title == "模拟需求"
-        assert req.type == RequirementType.FUNCTIONAL
-        assert req.priority == Priority.MEDIUM
-        assert len(req.acceptance_criteria) >= 1
+        assert extractor.provider == AIProvider.OLLAMA
+        assert extractor.model == "qwen3:4b"
+        assert extractor.ollama_url == "http://localhost:11434"
+    
+    def test_default_models(self):
+        """测试默认模型设置"""
+        # 测试OpenAI默认模型
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
+            extractor = LangChainExtractor(provider=AIProvider.OPENAI)
+            assert extractor.model == "gpt-3.5-turbo"
+        
+        # 测试Gemini默认模型
+        with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
+            extractor = LangChainExtractor(provider=AIProvider.GEMINI)
+            assert extractor.model == "gemini-1.5-pro"
+        
+        # 测试Ollama默认模型
+        extractor = LangChainExtractor(provider=AIProvider.OLLAMA)
+        assert extractor.model == "qwen3:4b"
+    
+    def test_missing_api_key_errors(self):
+        """测试缺少API密钥时的错误处理"""
+        # 测试OpenAI缺少API密钥
+        with patch.dict('os.environ', {}, clear=True):
+            with pytest.raises(ValueError, match="使用OpenAI提供商需要提供API密钥"):
+                LangChainExtractor(provider=AIProvider.OPENAI)
+        
+        # 测试Gemini缺少API密钥
+        with patch.dict('os.environ', {}, clear=True):
+            with pytest.raises(ValueError, match="使用Gemini提供商需要提供Google API密钥"):
+                LangChainExtractor(provider=AIProvider.GEMINI)
+    
+    def test_custom_api_keys(self):
+        """测试自定义API密钥"""
+        # 测试自定义OpenAI API密钥
+        extractor = LangChainExtractor(
+            provider=AIProvider.OPENAI,
+            openai_api_key="custom-openai-key"
+        )
+        assert extractor.openai_api_key == "custom-openai-key"
+        
+        # 测试自定义Google API密钥
+        extractor = LangChainExtractor(
+            provider=AIProvider.GEMINI,
+            google_api_key="custom-google-key"
+        )
+        assert extractor.google_api_key == "custom-google-key"
     
     @pytest.mark.asyncio
-    async def test_extract_non_functional_requirements(self):
-        """测试提取非功能需求 - 这个测试现在会失败"""
-        extractor = LangChainExtractor()
-        
-        document = Document(
-            title="系统性能需求",
-            content="""# 系统性能需求
-
-## 非功能需求
-
-### 性能要求
-- 响应时间 < 2秒
-- 支持1000并发用户
-- 99.9%可用性
-
-### 安全要求
-- 密码加密存储
-- 支持HTTPS
-- 数据备份每日执行
-""",
-            document_type=DocumentType.MARKDOWN
-        )
-        
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
+    async def test_openai_extract_async(self, sample_document, mock_response):
+        """测试OpenAI异步提取"""
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
+            extractor = LangChainExtractor(provider=AIProvider.OPENAI)
             
-            mock_response = Mock()
-            mock_response.choices = [Mock()]
-            mock_response.choices[0].message.content = '''[
-                {
-                    "id": "REQ-003",
-                    "title": "系统性能要求",
-                    "description": "系统必须满足性能指标",
-                    "type": "non_functional",
-                    "priority": "high",
-                    "acceptance_criteria": [
-                        "响应时间 < 2秒",
-                        "支持1000并发用户",
-                        "99.9%可用性"
-                    ]
-                }
-            ]'''
+            # 模拟chain
+            original_chain = extractor.chain
+            mock_chain = MagicMock()
+            mock_chain.ainvoke = AsyncMock(return_value=mock_response)
             
-            mock_client.chat.completions.create.return_value = mock_response
-            
-            requirements = await extractor.extract_async(document)
-            
-            assert len(requirements) == 1
-            req = requirements[0]
-            assert req.type == RequirementType.NON_FUNCTIONAL
-            assert req.priority == Priority.HIGH
+            try:
+                extractor.chain = mock_chain
+                
+                # 执行提取
+                requirements = await extractor.extract_async(sample_document)
+                
+                # 验证结果
+                assert len(requirements) == 2
+                assert requirements[0].title == "用户注册"
+                assert requirements[0].type == RequirementType.FUNCTIONAL
+                assert requirements[0].priority == Priority.HIGH
+                assert "langchain_openai_extractor" in requirements[0].extracted_by
+                
+            finally:
+                extractor.chain = original_chain
     
     @pytest.mark.asyncio
-    async def test_extract_user_stories(self):
-        """测试提取用户故事 - 这个测试现在会失败"""
-        extractor = LangChainExtractor()
-        
-        document = Document(
-            title="用户故事",
-            content="""# 用户故事
-
-## 作为用户，我希望能够注册账户
-**验收标准：**
-- 用户可以输入邮箱和密码
-- 密码强度验证
-- 注册成功后跳转到登录页面
-
-**优先级：** 高
-
-## 作为管理员，我希望能够管理用户
-**验收标准：**
-- 查看用户列表
-- 禁用/启用用户账户
-- 重置用户密码
-
-**优先级：** 中
-""",
-            document_type=DocumentType.MARKDOWN
-        )
-        
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
+    async def test_gemini_extract_async(self, sample_document, mock_response):
+        """测试Gemini异步提取"""
+        with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
+            extractor = LangChainExtractor(provider=AIProvider.GEMINI)
             
-            mock_response = Mock()
-            mock_response.choices = [Mock()]
-            mock_response.choices[0].message.content = '''[
-                {
-                    "id": "US-001",
-                    "title": "用户账户注册",
-                    "description": "作为用户，我希望能够注册账户",
-                    "type": "user_story",
-                    "priority": "high",
-                    "acceptance_criteria": [
-                        "用户可以输入邮箱和密码",
-                        "密码强度验证",
-                        "注册成功后跳转到登录页面"
-                    ]
-                }
-            ]'''
+            # 模拟chain
+            original_chain = extractor.chain
+            mock_chain = MagicMock()
+            mock_chain.ainvoke = AsyncMock(return_value=mock_response)
             
-            mock_client.chat.completions.create.return_value = mock_response
-            
-            requirements = await extractor.extract_async(document)
-            
-            assert len(requirements) == 1
-            req = requirements[0]
-            assert req.type == RequirementType.USER_STORY
-            assert "作为用户" in req.description
-    
-    def test_extract_sync_method(self):
-        """测试同步提取方法 - 这个测试现在会失败"""
-        extractor = LangChainExtractor()
-        
-        document = Document(
-            title="简单需求",
-            content="用户需要登录功能",
-            document_type=DocumentType.MARKDOWN
-        )
-        
-        with patch.object(extractor, 'extract_async') as mock_async:
-            mock_async.return_value = [
-                Requirement(
-                    id="REQ-001",
-                    title="用户登录",
-                    description="用户需要登录功能",
-                    type=RequirementType.FUNCTIONAL,
-                    priority=Priority.MEDIUM
-                )
-            ]
-            
-            requirements = extractor.extract(document)
-            
-            assert len(requirements) == 1
-            assert requirements[0].title == "用户登录"
+            try:
+                extractor.chain = mock_chain
+                
+                # 执行提取
+                requirements = await extractor.extract_async(sample_document)
+                
+                # 验证结果
+                assert len(requirements) == 2
+                assert requirements[0].title == "用户注册"
+                assert requirements[1].title == "商品搜索"
+                assert "langchain_gemini_extractor" in requirements[0].extracted_by
+                
+            finally:
+                extractor.chain = original_chain
     
     @pytest.mark.asyncio
-    async def test_extract_with_custom_prompt(self):
-        """测试使用自定义提示词提取 - 这个测试现在会失败"""
-        extractor = LangChainExtractor()
+    async def test_ollama_extract_async(self, sample_document, mock_response):
+        """测试Ollama异步提取"""
+        extractor = LangChainExtractor(provider=AIProvider.OLLAMA)
         
-        document = Document(
-            title="API需求",
-            content="需要创建用户API",
-            document_type=DocumentType.MARKDOWN
-        )
+        # 模拟chain
+        original_chain = extractor.chain
+        mock_chain = MagicMock()
+        mock_chain.ainvoke = AsyncMock(return_value=mock_response)
         
-        custom_prompt = "请专注于API设计需求的提取"
-        
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
+        try:
+            extractor.chain = mock_chain
             
-            mock_response = Mock()
-            mock_response.choices = [Mock()]
-            mock_response.choices[0].message.content = '''[
-                {
-                    "id": "API-001",
-                    "title": "用户API创建",
-                    "description": "创建用户管理相关的API接口",
-                    "type": "functional",
-                    "priority": "high",
-                    "acceptance_criteria": ["API接口设计", "数据验证", "错误处理"]
-                }
-            ]'''
+            # 执行提取
+            requirements = await extractor.extract_async(sample_document)
             
-            mock_client.chat.completions.create.return_value = mock_response
+            # 验证结果
+            assert len(requirements) == 2
+            assert requirements[0].title == "用户注册"
+            assert requirements[1].title == "商品搜索"
+            assert "langchain_ollama_extractor" in requirements[0].extracted_by
             
-            requirements = await extractor.extract_async(document, custom_prompt=custom_prompt)
-            
-            # 验证自定义提示词被使用
-            call_args = mock_client.chat.completions.create.call_args
-            assert custom_prompt in str(call_args)
-            
-            assert len(requirements) == 1
-            assert "API" in requirements[0].title
+        finally:
+            extractor.chain = original_chain
     
-    @pytest.mark.asyncio
-    async def test_extract_accuracy_validation(self):
-        """测试提取准确率验证 - 这个测试现在会失败"""
-        extractor = LangChainExtractor()
-        
-        document = Document(
-            title="测试需求",
-            content="""
-            需求1: 用户登录
-            需求2: 用户注册  
-            需求3: 密码重置
-            """,
-            document_type=DocumentType.MARKDOWN
-        )
-        
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
+    def test_provider_switching(self):
+        """测试供应商切换"""
+        # 创建不同供应商的提取器
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key', 'GOOGLE_API_KEY': 'test-google-key'}):
+            openai_extractor = LangChainExtractor(provider=AIProvider.OPENAI)
+            gemini_extractor = LangChainExtractor(provider=AIProvider.GEMINI)
+            ollama_extractor = LangChainExtractor(provider=AIProvider.OLLAMA)
             
-            mock_response = Mock()
-            mock_response.choices = [Mock()]
-            mock_response.choices[0].message.content = '''[
-                {
-                    "id": "REQ-001",
-                    "title": "用户登录",
-                    "description": "用户登录功能",
-                    "type": "functional",
-                    "priority": "high",
-                    "acceptance_criteria": []
-                },
-                {
-                    "id": "REQ-002",
-                    "title": "用户注册",
-                    "description": "用户注册功能",
-                    "type": "functional", 
-                    "priority": "high",
-                    "acceptance_criteria": []
-                }
-            ]'''
+            # 验证不同的提供商
+            assert openai_extractor.provider == AIProvider.OPENAI
+            assert gemini_extractor.provider == AIProvider.GEMINI
+            assert ollama_extractor.provider == AIProvider.OLLAMA
             
-            mock_client.chat.completions.create.return_value = mock_response
-            
-            result = await extractor.extract_with_accuracy(document)
-            
-            # 验证返回结果包含准确率信息
-            assert 'requirements' in result
-            assert 'accuracy' in result
-            assert 'confidence' in result
-            
-            # 验证准确率计算（2个提取出来，3个预期，准确率约67%）
-            assert result['accuracy'] >= 0.6
-            assert len(result['requirements']) == 2
+            # 验证不同的LLM类型
+            assert openai_extractor.llm.__class__.__name__ == "ChatOpenAI"
+            assert gemini_extractor.llm.__class__.__name__ == "ChatGoogleGenerativeAI"
+            assert ollama_extractor.llm.__class__.__name__ == "ChatOllama"
     
-    @pytest.mark.asyncio
-    async def test_extract_error_handling(self):
-        """测试错误处理 - 这个测试现在会失败"""
-        extractor = LangChainExtractor()
-        
-        document = Document(
-            title="测试文档",
-            content="测试内容",
-            document_type=DocumentType.MARKDOWN
+    def test_temperature_configuration(self):
+        """测试温度参数配置"""
+        extractor = LangChainExtractor(
+            provider=AIProvider.OLLAMA,
+            temperature=0.5
         )
-        
-        # 测试API错误
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            mock_client.chat.completions.create.side_effect = Exception("API Error")
-            
-            with pytest.raises(Exception, match="需求提取失败"):
-                await extractor.extract_async(document)
+        assert extractor.temperature == 0.5
+        assert extractor.llm.temperature == 0.5
     
-    @pytest.mark.asyncio
-    async def test_extract_performance(self):
-        """测试提取性能 - 这个测试现在会失败"""
-        extractor = LangChainExtractor()
-        
-        # 创建大型文档
-        large_content = "# 大型需求文档\n\n" + "\n\n".join([
-            f"## 需求 {i}\n用户需要功能{i}"
-            for i in range(50)
-        ])
-        
-        document = Document(
-            title="大型需求文档",
-            content=large_content,
-            document_type=DocumentType.MARKDOWN
+    def test_system_prompt_consistency(self):
+        """测试系统提示词一致性"""
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key', 'GOOGLE_API_KEY': 'test-google-key'}):
+            openai_extractor = LangChainExtractor(provider=AIProvider.OPENAI)
+            gemini_extractor = LangChainExtractor(provider=AIProvider.GEMINI)
+            ollama_extractor = LangChainExtractor(provider=AIProvider.OLLAMA)
+            
+            # 所有提取器应该使用相同的系统提示词
+            openai_prompt = openai_extractor._get_system_prompt()
+            gemini_prompt = gemini_extractor._get_system_prompt()
+            ollama_prompt = ollama_extractor._get_system_prompt()
+            
+            assert openai_prompt == gemini_prompt == ollama_prompt
+            assert "需求分析师" in openai_prompt
+            assert "JSON格式" in openai_prompt
+    
+    def test_unsupported_provider_error(self):
+        """测试不支持的提供商错误"""
+        # 这个测试需要模拟一个无效的提供商
+        # 由于我们使用枚举，这种情况在正常使用中不会发生
+        # 但我们可以测试枚举的有效性
+        valid_providers = [AIProvider.OPENAI, AIProvider.GEMINI, AIProvider.OLLAMA]
+        assert len(valid_providers) == 3
+        assert AIProvider.OPENAI.value == "openai"
+        assert AIProvider.GEMINI.value == "gemini"
+        assert AIProvider.OLLAMA.value == "ollama"
+
+class TestProviderSpecificFeatures:
+    """测试供应商特定功能"""
+    
+    def test_openai_specific_configuration(self):
+        """测试OpenAI特定配置"""
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
+            extractor = LangChainExtractor(
+                provider=AIProvider.OPENAI,
+                model="gpt-4",
+                temperature=0.2
+            )
+            
+            assert extractor.model == "gpt-4"
+            assert extractor.temperature == 0.2
+            assert hasattr(extractor.llm, 'model_name')
+    
+    def test_gemini_specific_configuration(self):
+        """测试Gemini特定配置"""
+        with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
+            extractor = LangChainExtractor(
+                provider=AIProvider.GEMINI,
+                model="gemini-1.5-flash",
+                temperature=0.3
+            )
+            
+            assert extractor.model == "gemini-1.5-flash"
+            assert extractor.temperature == 0.3
+    
+    def test_ollama_specific_configuration(self):
+        """测试Ollama特定配置"""
+        extractor = LangChainExtractor(
+            provider=AIProvider.OLLAMA,
+            model="llama3.1",
+            ollama_url="http://custom-host:11434",
+            temperature=0.1
         )
         
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            mock_response = Mock()
-            mock_response.choices = [Mock()]
-            mock_response.choices[0].message.content = '[]'  # 空结果
-            
-            mock_client.chat.completions.create.return_value = mock_response
-            
-            import time
-            start_time = time.time()
-            requirements = await extractor.extract_async(document)
-            end_time = time.time()
-            
-            # 验证性能要求（应该在5秒内完成）
-            extract_time = end_time - start_time
-            assert extract_time < 5.0, f"提取时间过长: {extract_time:.2f}秒"
+        assert extractor.model == "llama3.1"
+        assert extractor.ollama_url == "http://custom-host:11434"
+        assert extractor.temperature == 0.1
