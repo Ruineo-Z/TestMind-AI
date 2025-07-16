@@ -43,7 +43,6 @@ class SimpleAPITestGenerator:
             # 2. 生成测试用例
             print("\n🧪 步骤2: 生成测试用例...")
             test_result = await self._generate_tests(parse_result)
-            print(test_result)
 
             # 3. 保存测试文件
             print("\n💾 步骤3: 保存测试文件...")

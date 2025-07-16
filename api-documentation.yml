@@ -1,0 +1,163 @@
+openapi: 3.0.3
+info:
+  title: FastAPI 演示接口
+  description: 基于FastAPI的简单演示接口项目，提供基本的CRUD操作来管理项目数据
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+    description: 本地开发服务器
+
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 项目唯一标识符
+          example: 1
+        name:
+          type: string
+          description: 项目名称
+          example: "示例项目"
+        description:
+          type: string
+          nullable: true
+          description: 项目描述（可选）
+          example: "这是一个示例项目"
+      required:
+        - id
+        - name
+
+    ItemCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 项目名称
+          example: "新项目"
+        description:
+          type: string
+          nullable: true
+          description: 项目描述（可选）
+          example: "项目描述"
+      required:
+        - name
+
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
+          description: 消息内容
+          example: "欢迎使用FastAPI演示接口"
+
+    DeleteResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: 删除确认消息
+          example: "项目 示例项目 已删除"
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 错误详情
+          example: "项目未找到"
+
+paths:
+  /:
+    get:
+      summary: 获取欢迎消息
+      description: 返回API服务的欢迎消息
+      operationId: getWelcomeMessage
+      tags:
+        - 基础接口
+      responses:
+        '200':
+          description: 成功返回欢迎消息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /items:
+    get:
+      summary: 获取所有项目
+      description: 获取所有项目的列表
+      operationId: getAllItems
+      tags:
+        - 项目管理
+      responses:
+        '200':
+          description: 成功返回项目列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+
+    post:
+      summary: 创建新项目
+      description: 创建一个新的项目
+      operationId: createItem
+      tags:
+        - 项目管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreate'
+      responses:
+        '201':
+          description: 项目创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '422':
+          description: 请求数据验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /items/{item_id}:
+    delete:
+      summary: 删除项目
+      description: 删除指定ID的项目
+      operationId: deleteItem
+      tags:
+        - 项目管理
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          description: 要删除的项目ID
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: 项目删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '404':
+          description: 项目不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: 基础接口
+    description: 基础功能接口
+  - name: 项目管理
+    description: 项目相关的CRUD操作

@@ -1,6 +1,6 @@
 """
-测试用例生成API端点
-专门负责基于文档数据生成测试用例
+AI驱动的测试用例生成API端点
+Sprint3核心功能：利用AI能力实现测试自动化
 """
 import uuid
 from datetime import datetime
@@ -12,6 +12,8 @@ from app.api.models.requests import (
     TestGenerateRequest, TestGenerateResponse, TaskStatusResponse,
     TestType, AIProvider, TaskStatus, GeneratedTestCase
 )
+from app.test_case_generator.service import AITestCaseGenerationService
+from app.requirements_parser.models.api_document import APIDocument
 
 
 router = APIRouter(prefix="/tests", tags=["tests"])
@@ -27,33 +29,40 @@ async def generate_test_cases(
     background_tasks: BackgroundTasks
 ) -> TestGenerateResponse:
     """
-    基于文档数据生成测试用例
-    
+    AI驱动的测试用例生成
+
+    这是Sprint3的核心功能：利用AI能力分析API文档并自动生成pytest测试用例
+
     Args:
-        request: 测试生成请求
+        request: 测试生成请求，包含API文档数据和生成配置
         background_tasks: 后台任务
-        
+
     Returns:
-        TestGenerateResponse: 生成的测试用例
-        
+        TestGenerateResponse: 生成的测试用例和pytest代码
+
     Raises:
-        HTTPException: 生成失败时抛出
+        HTTPException: AI生成失败或参数错误时抛出
     """
     try:
-        # 验证请求数据
+        # 验证请求参数
         if not request.document_data:
-            raise HTTPException(status_code=400, detail="文档数据不能为空")
-        
-        # 根据测试类型生成测试用例
+            raise HTTPException(
+                status_code=400,
+                detail="document_data不能为空，请先使用/documents/parse解析API文档"
+            )
+
+        # 根据测试类型使用AI生成测试用例
         if request.test_type == TestType.API_TEST:
-            return await _generate_api_tests(request)
+            return await _generate_ai_api_tests(request)
         elif request.test_type == TestType.PROMPT_TEST:
-            return await _generate_prompt_tests(request)
+            return await _generate_ai_prompt_tests(request)
         else:
             raise HTTPException(status_code=400, detail=f"不支持的测试类型: {request.test_type}")
-            
+
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"生成测试用例失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI测试用例生成失败: {str(e)}")
 
 
 @router.post("/generate-async")
@@ -113,68 +122,169 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
     return TaskStatusResponse(**task_data)
 
 
-async def _generate_api_tests(request: TestGenerateRequest) -> TestGenerateResponse:
+@router.get("/capabilities")
+async def get_generation_capabilities() -> Dict[str, Any]:
     """
-    生成API测试用例
-    
+    获取AI测试生成能力信息
+
+    Returns:
+        Dict: 支持的功能和配置选项
+    """
+    return {
+        "ai_providers": [provider.value for provider in AIProvider],
+        "test_frameworks": ["pytest", "unittest"],
+        "test_types": {
+            "positive": "正向测试 - 验证API正常功能",
+            "negative": "负向测试 - 验证错误处理",
+            "boundary": "边界测试 - 验证边界条件"
+        },
+        "supported_api_formats": [
+            "OpenAPI 3.0 (JSON/YAML)",
+            "Swagger 2.0 (JSON/YAML)",
+            "API Markdown"
+        ],
+        "ai_capabilities": {
+            "api_analysis": "智能分析API结构和复杂度",
+            "test_strategy": "基于API特征生成测试策略",
+            "test_generation": "自动生成具体测试用例",
+            "code_generation": "生成可执行的pytest代码"
+        },
+        "quality_features": {
+            "real_data": "使用真实测试数据，避免mock",
+            "chinese_comments": "生成中文注释的代码",
+            "httpx_client": "使用httpx作为HTTP客户端",
+            "async_support": "支持异步测试执行"
+        }
+    }
+
+
+@router.get("/health")
+async def health_check() -> Dict[str, str]:
+    """
+    AI测试生成服务健康检查
+
+    Returns:
+        Dict: 服务状态信息
+    """
+    return {
+        "status": "healthy",
+        "service": "AI Test Case Generation Service",
+        "version": "1.0.0",
+        "description": "利用AI能力实现测试自动化"
+    }
+
+
+async def _generate_ai_api_tests(request: TestGenerateRequest) -> TestGenerateResponse:
+    """
+    使用AI生成API测试用例
+
     Args:
         request: 测试生成请求
-        
+
     Returns:
-        TestGenerateResponse: 生成的API测试用例
+        TestGenerateResponse: AI生成的API测试用例
     """
-    # 检查是否有API文档数据
-    api_document = request.document_data.get("api_document")
+    # 提取API文档对象
+    api_document = _extract_api_document(request.document_data)
     if not api_document:
-        raise HTTPException(status_code=400, detail="缺少API文档数据")
-    
-    test_cases = []
-    positive_count = 0
-    negative_count = 0
-    boundary_count = 0
-    
-    # 遍历API端点生成测试用例
-    endpoints = api_document.get("endpoints", [])
-    for endpoint in endpoints:
-        # 生成正向测试
-        if request.include_positive_tests:
-            positive_test = _generate_positive_api_test(endpoint)
-            test_cases.append(positive_test)
-            positive_count += 1
-        
-        # 生成负向测试
-        if request.include_negative_tests:
-            negative_test = _generate_negative_api_test(endpoint)
-            test_cases.append(negative_test)
-            negative_count += 1
-        
-        # 生成边界测试
-        if request.include_boundary_tests:
-            boundary_test = _generate_boundary_api_test(endpoint)
-            test_cases.append(boundary_test)
-            boundary_count += 1
-    
-    # 生成完整的测试文件内容
-    test_file_content = _build_api_test_file(test_cases, api_document)
-    
+        raise HTTPException(
+            status_code=400,
+            detail="无法从document_data中提取API文档，请确保文档类型为API文档"
+        )
+
+    # 创建AI测试生成服务
+    ai_service = AITestCaseGenerationService(ai_provider=request.ai_provider.value)
+
+    # 使用AI生成测试套件
+    generation_result = await ai_service.generate_test_suite(
+        api_document=api_document,
+        include_positive=request.include_positive_tests,
+        include_negative=request.include_negative_tests,
+        include_boundary=request.include_boundary_tests,
+        test_framework=request.test_framework
+    )
+
+    # 构建响应
+    test_suite = generation_result["test_suite"]
+
     return TestGenerateResponse(
         test_type=request.test_type,
-        test_cases=test_cases,
-        test_file_content=test_file_content,
-        total_tests=len(test_cases),
-        positive_tests=positive_count,
-        negative_tests=negative_count,
-        boundary_tests=boundary_count,
+        test_cases=[],  # 简化响应，主要返回文件内容
+        test_file_content=generation_result["test_file_content"],
+        total_tests=test_suite.total_tests,
+        positive_tests=test_suite.positive_tests,
+        negative_tests=test_suite.negative_tests,
+        boundary_tests=test_suite.boundary_tests,
         metadata={
-            "ai_provider": request.ai_provider,
-            "test_framework": request.test_framework,
-            "endpoints_count": len(endpoints),
-            "generated_at": datetime.now().isoformat()
+            "ai_provider": request.ai_provider.value,
+            "generation_time": generation_result["generation_metadata"]["generation_time"],
+            "processing_time": generation_result["processing_time"],
+            "api_title": api_document.info.title,
+            "api_version": api_document.info.version,
+            "endpoints_analyzed": generation_result["generation_metadata"]["api_endpoints_count"],
+            "ai_analysis": generation_result.get("api_analysis", {}),
+            "test_strategy": generation_result.get("test_strategy", {})
         }
     )
 
 
-async def _generate_prompt_tests(request: TestGenerateRequest) -> TestGenerateResponse:
+def _extract_api_document(document_data: Dict[str, Any]) -> APIDocument:
+    """
+    从文档数据中提取API文档对象
+
+    Args:
+        document_data: 来自Sprint2解析的文档数据
+
+    Returns:
+        APIDocument: API文档对象，如果不是API文档则返回None
+    """
+    try:
+        # 检查是否包含API文档数据
+        if "api_document" not in document_data:
+            return None
+
+        api_data = document_data["api_document"]
+
+        # 适配Sprint2解析的数据结构到APIDocument模型
+        adapted_data = _adapt_api_document_data(api_data)
+
+        return APIDocument(**adapted_data)
+
+    except Exception as e:
+        raise ValueError(f"解析API文档数据失败: {str(e)}")
+
+
+def _adapt_api_document_data(api_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    适配Sprint2解析的API数据结构到APIDocument模型
+
+    Args:
+        api_data: Sprint2解析的API数据
+
+    Returns:
+        Dict: 适配后的数据结构
+    """
+    adapted = api_data.copy()
+
+    # 添加必需的source_format字段
+    adapted["source_format"] = "openapi"
+
+    # 适配endpoints中的responses结构
+    if "endpoints" in adapted:
+        for endpoint in adapted["endpoints"]:
+            if "responses" in endpoint:
+                # 转换responses格式：从 {"200": {...}} 到 {"200": {"status_code": "200", ...}}
+                adapted_responses = {}
+                for status_code, response_data in endpoint["responses"].items():
+                    adapted_response = response_data.copy()
+                    adapted_response["status_code"] = status_code
+                    adapted_responses[status_code] = adapted_response
+                endpoint["responses"] = adapted_responses
+
+    return adapted
+
+
+async def _generate_ai_prompt_tests(request: TestGenerateRequest) -> TestGenerateResponse:
     """
     生成Prompt测试用例
     
