@@ -24,4 +24,16 @@
     </content>
     <tags>#其他</tags>
   </item>
+  <item id="mem_1752737326777_lxach2yzr" time="2025/07/17 15:28">
+    <content>
+      用户明确指示：只负责Sprint 3的修复任务，其他任务一概不管。当前发现生成的pytest代码有严重问题：1) async fixture语法错误需要使用@pytest_asyncio.fixture 2) 代码无法正常执行 3) 缺少POST/PUT等请求的测试数据。需要立即修复这些代码质量问题。
+    </content>
+    <tags>#其他</tags>
+  </item>
+  <item id="mem_1752738045532_7u79fts08" time="2025/07/17 15:40">
+    <content>
+      用户明确要求：测试代码必须完全由AI生成，禁止使用mock provider，禁止通过脚本代码生成，只能AI生成。需要移除所有备用生成机制，确保系统完全依赖AI能力。
+    </content>
+    <tags>#其他</tags>
+  </item>
 </memory>

@@ -52,6 +52,7 @@ class AIProvider(str, Enum):
     OPENAI = "openai"
     GEMINI = "gemini"
     OLLAMA = "ollama"
+    MOCK = "mock"
 
 
 class RequirementSchema(BaseModel):
@@ -102,11 +103,13 @@ class LangChainExtractor:
             self.model = model
         else:
             if provider == AIProvider.OPENAI:
-                self.model = "gpt-3.5-turbo"
+                self.model = ai_config.get("openai_model", "gpt-3.5-turbo")
             elif provider == AIProvider.GEMINI:
-                self.model = ai_config.get("gemini_model", "gemini-1.5-flash")
+                self.model = ai_config.get("gemini_model", "gemini-2.5-flash-lite-preview-06-17")
             elif provider == AIProvider.OLLAMA:
                 self.model = ai_config["ollama_model"]
+            elif provider == AIProvider.MOCK:
+                self.model = "mock-model"
             else:
                 self.model = "llama3"
 
@@ -143,6 +146,10 @@ class LangChainExtractor:
                 base_url=self.ollama_url
             )
 
+        elif self.provider == AIProvider.MOCK:
+            # 创建Mock LLM用于测试
+            self.llm = self._create_mock_llm()
+
         else:
             raise ValueError(f"不支持的AI提供商: {self.provider}")
 
@@ -161,6 +168,52 @@ class LangChainExtractor:
             | self.llm
             | self.output_parser
         )
+
+    def _create_mock_llm(self):
+        """创建Mock LLM用于测试"""
+
+        class MockLLM:
+            """简单的Mock LLM实现"""
+
+            def __init__(self):
+                self.mock_response = '''[
+                    {
+                        "id": "REQ-001",
+                        "title": "API接口测试需求",
+                        "description": "需要对FastAPI演示接口进行全面的自动化测试",
+                        "type": "functional",
+                        "priority": "high",
+                        "acceptance_criteria": [
+                            "能够测试GET /接口的欢迎消息",
+                            "能够测试GET /items接口的项目列表",
+                            "能够测试POST /items接口的项目创建",
+                            "能够测试DELETE /items/{item_id}接口的项目删除"
+                        ]
+                    },
+                    {
+                        "id": "REQ-002",
+                        "title": "测试用例生成需求",
+                        "description": "使用AI自动生成pytest测试用例，包含正向、负向和边界测试",
+                        "type": "functional",
+                        "priority": "high",
+                        "acceptance_criteria": [
+                            "生成的测试用例使用httpx客户端",
+                            "测试代码包含中文注释",
+                            "支持异步测试执行",
+                            "包含完整的断言验证"
+                        ]
+                    }
+                ]'''
+
+            def invoke(self, input_data):
+                """同步调用"""
+                return self.mock_response
+
+            async def ainvoke(self, input_data):
+                """异步调用"""
+                return self.mock_response
+
+        return MockLLM()
     
     def _get_system_prompt(self) -> str:
         """获取系统提示词"""

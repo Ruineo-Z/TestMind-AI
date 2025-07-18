@@ -46,8 +46,11 @@ class DocumentParsingService:
         }
 
         # 初始化AI提取器（仅用于需求文档）
-        self.requirements_extractor = LangChainExtractor(
-            provider=AIProvider(ai_provider),
+        if ai_provider == "mock":
+            self.requirements_extractor = None
+        else:
+            self.requirements_extractor = LangChainExtractor(
+                provider=AIProvider(ai_provider),
             model="gemini-1.5-pro" if ai_provider == "gemini" else "gpt-3.5-turbo"
         )
     
@@ -194,8 +197,12 @@ class DocumentParsingService:
             List[Requirement]: 提取的需求列表
         """
         try:
+            # 如果是mock提供商，返回空需求列表
+            if self.ai_provider == "mock":
+                return []
+
             # 使用LangChain提取器提取需求
-            requirements = await self.extractor.extract_async(document)
+            requirements = await self.requirements_extractor.extract_async(document)
             
             # 如果需要，额外提取用户故事
             if extract_user_stories and document.user_stories:

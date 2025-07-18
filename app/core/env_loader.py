@@ -82,8 +82,11 @@ class EnvLoader:
             "openai_api_key": os.environ.get("OPENAI_API_KEY"),
 
             # Gemini配置
-            "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"),
+            "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite-preview-06-17"),
 
+            # OpenAI配置
+            "openai_model": os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo"),
+            
             # Ollama配置
             "ollama_base_url": os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
             "ollama_model": os.environ.get("OLLAMA_MODEL", "qwen2.5:3b"),

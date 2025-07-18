@@ -149,70 +149,149 @@ API分析结果：
 """
 
     def get_test_cases_prompt(
-        self, 
-        api_analysis: Dict[str, Any], 
+        self,
+        api_analysis: Dict[str, Any],
         test_strategy: Dict[str, Any]
     ) -> str:
         """
         获取具体测试用例生成提示词
-        
+
         Args:
             api_analysis: API分析结果
             test_strategy: 测试策略
-            
+
         Returns:
             str: 测试用例生成提示词
         """
         return f"""
-基于API分析和测试策略，请生成具体的测试用例：
+你是一位资深的API测试专家，请基于API分析和测试策略生成完整的测试用例。
 
-API分析：
+API分析结果：
 {json.dumps(api_analysis, ensure_ascii=False, indent=2)}
 
 测试策略：
 {json.dumps(test_strategy, ensure_ascii=False, indent=2)}
 
-请为每个测试场景生成详细的测试用例，包括：
+**重要要求**：
+1. 必须生成正向、负向、边界三种类型的测试用例
+2. 每种类型至少生成2个测试用例
+3. 测试用例必须覆盖API的所有主要端点
+4. 使用真实的测试数据，避免使用mock数据
 
-1. **测试用例基本信息**：
-   - 测试名称（英文，符合pytest命名规范）
-   - 测试描述（中文，清晰说明测试目的）
-   - 测试类型（positive/negative/boundary）
+**测试用例生成规则**：
 
-2. **请求信息**：
-   - HTTP方法和路径
-   - 请求头（如果需要）
-   - 请求参数（路径参数、查询参数）
-   - 请求体（如果需要）
+**正向测试用例 (positive)**：
+- 测试正常的成功场景
+- 使用有效的参数和数据
+- 期望返回2xx状态码
+- 验证响应数据的正确性
 
-3. **期望结果**：
-   - 期望的HTTP状态码
-   - 期望的响应结构
-   - 关键字段验证规则
+**负向测试用例 (negative)**：
+- 测试错误和异常场景
+- 使用无效参数、缺失参数、错误格式
+- 期望返回4xx或5xx状态码
+- 验证错误处理的正确性
 
-4. **测试数据**：
-   - 使用真实可能的测试数据
-   - 避免使用mock或假数据
-   - 考虑数据的业务合理性
+**边界测试用例 (boundary)**：
+- 测试边界条件和极限值
+- 空值、最大值、最小值、特殊字符
+- 测试参数长度限制
+- 验证边界处理的正确性
 
-请以JSON格式返回测试用例列表：
+请严格按照以下JSON格式返回测试用例，确保JSON格式正确：
+
+```json
 {{
     "test_cases": [
         {{
-            "name": "test_get_user_success",
-            "description": "测试获取用户信息成功场景",
+            "name": "test_get_welcome_success",
+            "description": "测试获取欢迎消息成功场景",
             "type": "positive",
-            "endpoint": "/api/v1/users/{{user_id}}",
+            "endpoint": "/",
             "method": "GET",
-            "headers": {{"Authorization": "Bearer {{token}}"}},
-            "params": {{"user_id": "12345"}},
+            "headers": {{}},
+            "params": {{}},
             "body": null,
             "expected_status": 200,
-            "expected_response": {{"user_id": "12345", "name": "string"}},
-            "validations": ["response.user_id == params.user_id", "response.name is not None"]
+            "expected_response": {{"message": "string"}},
+            "validations": ["response.status_code == 200", "response.message is not None"]
+        }},
+        {{
+            "name": "test_get_items_success",
+            "description": "测试获取项目列表成功场景",
+            "type": "positive",
+            "endpoint": "/items",
+            "method": "GET",
+            "headers": {{}},
+            "params": {{}},
+            "body": null,
+            "expected_status": 200,
+            "expected_response": [],
+            "validations": ["response.status_code == 200", "isinstance(response.json(), list)"]
+        }},
+        {{
+            "name": "test_create_item_invalid_data",
+            "description": "测试创建项目时使用无效数据",
+            "type": "negative",
+            "endpoint": "/items",
+            "method": "POST",
+            "headers": {{"Content-Type": "application/json"}},
+            "params": {{}},
+            "body": {{"invalid": "data"}},
+            "expected_status": 422,
+            "expected_response": {{"detail": "string"}},
+            "validations": ["response.status_code == 422"]
+        }},
+        {{
+            "name": "test_delete_nonexistent_item",
+            "description": "测试删除不存在的项目",
+            "type": "negative",
+            "endpoint": "/items/99999",
+            "method": "DELETE",
+            "headers": {{}},
+            "params": {{"item_id": "99999"}},
+            "body": null,
+            "expected_status": 404,
+            "expected_response": {{"detail": "string"}},
+            "validations": ["response.status_code == 404"]
+        }},
+        {{
+            "name": "test_create_item_empty_body",
+            "description": "测试创建项目时使用空请求体",
+            "type": "boundary",
+            "endpoint": "/items",
+            "method": "POST",
+            "headers": {{"Content-Type": "application/json"}},
+            "params": {{}},
+            "body": {{}},
+            "expected_status": 422,
+            "expected_response": {{"detail": "string"}},
+            "validations": ["response.status_code in [400, 422]"]
+        }},
+        {{
+            "name": "test_invalid_http_method",
+            "description": "测试使用不支持的HTTP方法",
+            "type": "boundary",
+            "endpoint": "/",
+            "method": "PATCH",
+            "headers": {{}},
+            "params": {{}},
+            "body": null,
+            "expected_status": 405,
+            "expected_response": {{}},
+            "validations": ["response.status_code == 405"]
         }}
     ]
 }}
+```
+
+**注意事项**：
+1. 确保JSON格式完全正确，没有语法错误
+2. 每个测试用例都必须包含所有必需字段
+3. 测试名称必须以"test_"开头，符合pytest规范
+4. 测试类型必须是"positive"、"negative"或"boundary"之一
+5. 根据实际API端点调整endpoint和method字段
+6. 确保生成至少6个测试用例，覆盖三种类型
 """
 
     def get_code_generation_prompt(
